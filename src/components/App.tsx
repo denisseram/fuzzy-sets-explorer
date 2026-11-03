@@ -9,6 +9,8 @@ import Upset from "./Upset";
 const DATASETS: DatasetOption[] = [
   { key: "movielens", label: "MovieLens genres (graded)" },
   { key: "movies", label: "UpSet movies (crisp)" },
+  { key: "iris", label: "Iris species, kNN (graded)" },
+  { key: "integration", label: "Integration cell types, kNN (graded)" },
 ];
 
 /** Picks the dataset (?dataset=<key> or the first), loads it and hands it to the explorer. */
