@@ -1,7 +1,7 @@
 // Fuzzy UpSet definitions on small hand-built membership tables with known answers.
 import { describe, expect, it } from "vitest";
 import {
-  cellsFor, composition, fractionsOf, intersections, meanOver, membershipSignatures, nearGroups, nearPattern, nearShare, NONE,
+  cellsFor, cellsForKeys, composition, setSizes, fractionsOf, intersections, meanOver, membershipSignatures, nearGroups, nearPattern, nearShare, NONE,
   holeRadius, nearMarked, strongestSet, summarise,
 } from "./fuzzyUpset";
 
@@ -124,5 +124,24 @@ describe("near a set: from the near level up to τ", () => {
 describe("strongest set", () => {
   it("argmax per observation; -1 when every membership is 0", () => {
     expect(Array.from(strongestSet(Float32Array.from([0.2, 0.7, 0, 0, 1, 0]), 2))).toEqual([1, -1, 0]);
+  });
+});
+
+describe("observations of several columns", () => {
+  it("cellsForKeys is the union of cellsFor, in index order", () => {
+    const Q = Float32Array.from([0.9, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.1, 0.1, 0.1]);
+    const s = membershipSignatures(Q, 2, 0.5);
+    expect(cellsForKeys(s, ["0", "0,1"])).toEqual([...cellsFor(s, "0"), ...cellsFor(s, "0,1")].sort((a, b) => a - b));
+    expect(cellsForKeys(s, ["9"])).toEqual([]);
+  });
+});
+
+describe("set sizes", () => {
+  it("per set: observations reaching tau (in any column) and the sum of their memberships", () => {
+    const s = setSizes(P, 3, 0.5);
+    // Comedy: 0.78, 0.9 · Romance: 0.6 · Drama: 0.55 (0.3, 0.4, 0.2 stay below tau)
+    expect(s.n).toEqual([2, 1, 1]);
+    expect(s.fuzzy.map((v) => +v.toFixed(2))).toEqual([1.68, 0.6, 0.55]);
+    s.n.forEach((n, l) => expect(s.fuzzy[l] >= 0.5 * n - 1e-6 && s.fuzzy[l] <= n + 1e-6).toBe(true));
   });
 });

@@ -67,6 +67,19 @@ export function membershipSignatures(P: ArrayLike<number>, L: number, tau: numbe
   return { sig, strength, border, keys, nNone };
 }
 
+/** Per set: how many observations reach τ in it (its α-cut, inclusive of every column holding the set), and the sum
+ *  of their memberships in it (between τ · n and n). */
+export function setSizes(P: ArrayLike<number>, L: number, tau: number): { n: number[]; fuzzy: number[] } {
+  const N = Math.floor(P.length / L);
+  const n = new Array(L).fill(0), fuzzy = new Array(L).fill(0);
+  for (let i = 0; i < N; i++)
+    for (let l = 0; l < L; l++) {
+      const v = P[i * L + l];
+      if (v >= tau - 1e-12) (n[l]++, (fuzzy[l] += v));
+    }
+  return { n, fuzzy };
+}
+
 /** One intersection per signature: its sets, fuzzy size and number of observations. */
 export function intersections(s: Signatures): Intersection[] {
   const rows = s.keys.map((key) => ({ key, labels: key === "" ? [] : key.split(",").map(Number), fuzzy: 0, n: 0, nBorder: 0 }));
@@ -86,6 +99,19 @@ export function cellsFor(s: Signatures, key: string): number[] {
   if (id === -1) return [];
   const out: number[] = [];
   for (let i = 0; i < s.sig.length; i++) if (s.sig[i] === id) out.push(i);
+  return out;
+}
+
+/** Observations whose signature is any of `keys`, in index order. */
+export function cellsForKeys(s: Signatures, keys: string[]): number[] {
+  const ids = new Set<number>();
+  for (const k of keys) {
+    const id = s.keys.indexOf(k);
+    if (id !== -1) ids.add(id);
+  }
+  const out: number[] = [];
+  if (!ids.size) return out;
+  for (let i = 0; i < s.sig.length; i++) if (ids.has(s.sig[i])) out.push(i);
   return out;
 }
 

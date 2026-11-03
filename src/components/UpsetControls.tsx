@@ -16,10 +16,12 @@ export type Display = {
   minShare: number;
   /** One row per combination (sets across the top) instead of one column per combination. */
   flip: boolean;
+  /** Draw the largest columns individually until they hold this share of the observations; summarise the rest. */
+  coverage: number;
 };
 
 export const DEFAULT_DISPLAY: Display = {
-  sortKey: "fuzzy", minSize: 2, stat: "median", belowMode: "rings", showSingle: true, nearFrac: 0.5, minShare: 0.2, flip: false,
+  sortKey: "fuzzy", minSize: 2, stat: "median", belowMode: "rings", showSingle: true, nearFrac: 0.5, minShare: 0.2, flip: false, coverage: 0.8,
 };
 
 /** τ range of the slider (and the barcode). */
@@ -94,7 +96,15 @@ export default function UpsetControls({
                   </select>
                 </div>
                 <div className="ctrl">
-                  <label htmlFor="fu-min">Min {obsWord} per column</label>
+                  <label>Draw individually</label>
+                  <div className="seg" role="group" aria-label="Draw columns individually until they hold this share of the observations" title={`The largest columns until they hold this share of the ${obsWord}; the rest are summarised by number of sets`}>
+                    {([[0.6, "60%"], [0.8, "80%"], [0.9, "90%"], [1, "all"]] as const).map(([v, t]) => (
+                      <button key={v} aria-pressed={display.coverage === v} onClick={() => set({ coverage: v })}>{t}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="ctrl">
+                  <label htmlFor="fu-min">Min {obsWord} to draw a column</label>
                   <input id="fu-min" type="number" min={0} step={1} value={display.minSize} onChange={(e) => set({ minSize: Math.max(0, +e.target.value) })} />
                 </div>
                 <div className="ctrl">

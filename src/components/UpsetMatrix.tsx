@@ -1,6 +1,7 @@
 import type { Category, NumericAttr, SetFamily } from "../lib/dataset";
 import { holeRadius, nearMarked, type NearGroup, type summarise } from "../lib/fuzzyUpset";
 import { inkOn } from "../lib/colors";
+import type { DegreeSummary } from "../lib/upsetModel";
 import { OTHER } from "../lib/palette";
 import { attrColor, attrLabel, attrT, fmtAttr, shortAttr, statOf, type AttrScale, type AttrStat } from "./attrHeatmap";
 import { compFill } from "./upsetPatterns";
@@ -10,6 +11,12 @@ const COL = 26, BAR_H = 110, DOT_ROW = 20, COMP_H = 40, ATTR_H = 14;
 /** Every slot of the dot matrix is a disc of radius DOT_R. A ring is the same disc in grey with a white hole whose
  *  radius (HOLE_MIN to HOLE_MAX) shrinks as the column's mean membership in the set rises towards τ. */
 const DOT_R = 6.5, HOLE_MIN = 1.5, HOLE_MAX = 5;
+/** Width of the set bars, left of the set names. */
+const SET_W = 72;
+/** Space before the summary columns. */
+const GAP = 14;
+/** At most this many of a summary's columns are listed when it is expanded. */
+export const LIST_MAX = 30;
 
 /** One slot of the dot matrix: a member (black disc), out (light grey disc) or near (a grey disc with a white hole of
  *  radius `hole`). */
@@ -19,6 +26,21 @@ function Dot({ cx, cy, member, hole = 0 }: { cx: number; cy: number; member: boo
     <>
       <circle cx={cx} cy={cy} r={DOT_R} fill={hole > 0 ? "var(--near-ring)" : "var(--rule)"} />
       {hole > 0 && <circle cx={cx} cy={cy} r={hole} fill="var(--panel)" />}
+    </>
+  );
+}
+
+/** One slot of a summary column: a grey disc filled from the bottom in proportion to `share` (the share of the
+ *  summary's observations whose column contains the set). */
+function PartialDot({ cx, cy, share }: { cx: number; cy: number; share: number }) {
+  const r = DOT_R, s = Math.min(1, Math.max(0, share));
+  const yc = cy + r - 2 * r * s, w = Math.sqrt(Math.max(0, r * r - (yc - cy) ** 2));
+  return (
+    <>
+      <circle cx={cx} cy={cy} r={r} fill="var(--rule)" />
+      {s >= 0.999 ? <circle cx={cx} cy={cy} r={r} fill="var(--ink)" />
+        : s > 0 && <path d={`M${cx - w},${yc} A${r},${r} 0 ${s > 0.5 ? 1 : 0} 0 ${cx + w},${yc} Z`} fill="var(--ink)" />}
+      <circle cx={cx} cy={cy} r={r - 0.4} fill="none" stroke="var(--ink-3)" strokeWidth={0.8} />
     </>
   );
 }
@@ -34,6 +56,10 @@ export type Column = {
   fuzzy: number;
   /** For a sub-column: its column and what its observations are near. */
   sub: { parent: string; kind: NearGroup["kind"]; near: number[] } | null;
+  /** For a summary column: the columns of one degree it pools. */
+  summary: DegreeSummary | null;
+  /** For a column listed under an expanded summary: that summary's key. */
+  listedIn: string | null;
   /** Has borderline observations, so it can be split into sub-columns. */
   expandable: boolean;
   expanded: boolean;
@@ -48,14 +74,17 @@ export type Tip = (ev: React.MouseEvent, title: string, lines: string[]) => void
  * The fuzzy UpSet as one SVG: per column (combination of sets) the fuzzy-size bar (solid) over the number of observations
  * (outline); the dot matrix, with a grey ring where enough of the column is near that set (the smaller its white
  * hole, the higher the column's mean membership in it); one composition row per category and the attribute heatmap. ▸ under a bar
- * splits the column into sub-columns by what its observations are near. `flip` transposes it: one row per combination,
- * the sets across the top.
+ * splits the column into sub-columns by what its observations are near. After a gap come the summary columns, one per
+ * degree, pooling the columns not drawn individually: a partially filled disc per set, ▸ to list their columns.
+ * `flip` transposes it: one row per combination, the sets across the top.
  */
 export default function UpsetMatrix({
-  sets, shown, info, comps, attrs, attrAll, scales, belowMode, minShare, tau, flip, stat, activeKey, pickedKeys, selCounts, selLabels,
+  sets, setSize, shown, info, comps, attrs, attrAll, scales, belowMode, minShare, tau, flip, stat, activeKey, pickedKeys, selCounts, selLabels,
   obsWord, title, colName, onSelect, onToggle, tip, onLeave,
 }: {
   sets: SetFamily;
+  /** Per set: observations reaching τ (outline bar) and the sum of their memberships (solid bar). */
+  setSize: { n: number[]; fuzzy: number[] };
   shown: Column[];
   info: Map<string, ColumnInfo>;
   comps: Comp[];
@@ -96,7 +125,10 @@ export default function UpsetMatrix({
   /** The anchor of a margin label: flipped, it reads up and away from the chart. */
   const side = flip ? "start" : "end";
   const nameW = Math.min(230, Math.max(90, ...sets.names.map((n) => n.length * 6.5), ...attrs.map((a, r) => attrLabel(a, scales[r]).length * 6)));
-  const LEFT = nameW + 16;
+  // the set bars just left of the set names (the margin is also sized for the longer attribute labels)
+  const setNameW = Math.max(...sets.names.map((n) => n.length * 6.5));
+  const LEFT = Math.max(nameW + 16, 4 + SET_W + 8 + setNameW + 25);
+  const setR = LEFT - 25 - setNameW - 8, setMax = Math.max(1, ...setSize.n);
   // flipped, the slanted labels of the last columns stick out to the right by up to nameW · cos 45°
   const slantPad = flip ? Math.ceil(nameW * Math.SQRT1_2) : 0;
   const yBase = 14 + BAR_H;
@@ -104,9 +136,14 @@ export default function UpsetMatrix({
   const yComp = yDots + L * DOT_ROW + 10;
   const yAttr = yComp + comps.length * (COMP_H + 8);
   const H = yAttr + (attrs.length ? attrs.length * aH + 6 : 0);
-  const W = LEFT + Math.max(shown.length, 1) * COL + 8;
-  const maxBar = Math.max(1, ...shown.map((it) => it.n));
-  const yOf = (v: number) => yBase - (v / maxBar) * BAR_H;
+  // column positions: a gap before the first summary
+  const firstSum = shown.findIndex((it) => it.summary);
+  const xOf = (i: number) => LEFT + i * COL + (firstSum >= 0 && i >= firstSum ? GAP : 0);
+  const W = xOf(Math.max(shown.length, 1)) + 8;
+  // the axis fits the individual columns; a taller summary bar is cut with a break mark
+  const main = shown.filter((it) => !it.summary);
+  const maxBar = Math.max(1, ...(main.length ? main : shown).map((it) => it.n));
+  const yOf = (v: number) => yBase - (Math.min(v, maxBar) / maxBar) * BAR_H;
   const setsOf = (ls: number[]) => ls.map((l) => sets.names[l]).join(" & ");
   const pctOf = (v: number) => (v > 0 && v < 0.005 ? "<1" : String(Math.round(v * 100)));
   const groupName = (g: NearGroup) =>
@@ -123,13 +160,37 @@ export default function UpsetMatrix({
       ))}
       <text className="bar-hd" {...(flip ? at(LEFT - 34, yBase - BAR_H / 2) : at(LEFT - 40, yBase - BAR_H / 2 - 6))} textAnchor={flip ? "middle" : "end"}>fuzzy size</text>
       <text className="bar-hd" {...(flip ? at(LEFT - 23, yBase - BAR_H / 2) : at(LEFT - 40, yBase - BAR_H / 2 + 5))} textAnchor={flip ? "middle" : "end"}>{obsWord}</text>
+      <text className="bar-lbl" {...(flip ? at(setR - SET_W / 2, yDots - 6) : at(setR, yDots - 3))} textAnchor="end">{obsWord} ≥ τ</text>
       {sets.names.map((n, l) => (
         <g key={n} opacity={selLabels && !selLabels.has(l) ? 0.3 : 1}>
           {l % 2 === 0 && <rect x={LEFT} y={yDots + l * DOT_ROW} width={W - LEFT - 8} height={DOT_ROW} fill="var(--rule-2)" opacity={0.6} />}
           <rect x={LEFT - 19} y={yDots + l * DOT_ROW + 5} width={10} height={10} rx={2} fill={sets.colors[l] ?? OTHER} />
           <text className="bar-lbl" {...at(LEFT - 25, yDots + l * DOT_ROW + 14, true)} textAnchor={side}>{n}</text>
+          <g
+            onMouseMove={(ev) => tip(ev, n, [
+              `${setSize.n[l]} ${obsWord} reach τ ${tau.toFixed(2)} (in any column holding ${n})`,
+              `sum of their memberships ${setSize.fuzzy[l].toFixed(1)}${setSize.n[l] ? ` (mean ${(setSize.fuzzy[l] / setSize.n[l]).toFixed(2)})` : ""}`,
+            ])}
+          >
+            <rect x={setR - SET_W} y={yDots + l * DOT_ROW + 2} width={SET_W} height={DOT_ROW - 4} fill="transparent" />
+            {setSize.n[l] > 0 && (
+              <rect
+                x={setR - (setSize.n[l] / setMax) * SET_W} y={yDots + l * DOT_ROW + 4.5} width={(setSize.n[l] / setMax) * SET_W} height={11}
+                rx={2} fill="var(--accent)" fillOpacity={0.1} stroke="var(--accent)" strokeWidth={1}
+              />
+            )}
+            {setSize.fuzzy[l] > 0 && (
+              <rect
+                x={setR - (setSize.fuzzy[l] / setMax) * SET_W} y={yDots + l * DOT_ROW + 4.5} width={(setSize.fuzzy[l] / setMax) * SET_W} height={11}
+                rx={2} fill="var(--accent)"
+              />
+            )}
+          </g>
         </g>
       ))}
+      {firstSum >= 0 && (
+        <line x1={xOf(firstSum) - GAP / 2} x2={xOf(firstSum) - GAP / 2} y1={0} y2={H} stroke="var(--rule)" strokeWidth={1.5} />
+      )}
       {comps.map((c, r) => (
         <text key={c.cat.key} className="bar-hd" {...at(LEFT - 8, yComp + r * (COMP_H + 8) + COMP_H / 2 + 3, true)} textAnchor={side}>by {c.cat.title}</text>
       ))}
@@ -138,7 +199,9 @@ export default function UpsetMatrix({
       ))}
 
       {shown.map((it, i) => {
-        const x = LEFT + i * COL, cx = x + COL / 2;
+        const x = xOf(i), cx = x + COL / 2;
+        const sm = it.summary;
+        const cut = it.n > maxBar;
         const nObs = it.n, nPure = it.n - it.nBorder;
         // one axis for both bars: a column's fuzzy size never exceeds its number of observations (strengths are <= 1)
         const topF = yOf(it.fuzzy), rrF = Math.min(3, (yBase - topF) / 2);
@@ -151,12 +214,16 @@ export default function UpsetMatrix({
         const head = colName(it.key);
         const lines = [
           `${nObs} ${obsWord} · fuzzy size ${it.fuzzy.toFixed(1)}`,
+          ...(sm ? [
+            `${sm.combos.length} ${sm.combos.length === 1 ? "column" : "columns"} not drawn individually; largest:`,
+            ...sm.combos.slice(0, 3).map((c) => `  ${setsOf(c.labels)} ${c.n}`),
+          ] : []),
           `${nPure} pure · ${it.nBorder} borderline`,
           ...(inf.groups && it.nBorder > 0
             ? [`borderline: ${inf.groups.filter((g) => g.kind !== "pure").map((g) => `${groupName(g)} ${g.idx.length}`).join(" · ")}`]
             : []),
           ...(nSel !== null ? [`selected: ${nSel} of ${nObs}`] : []),
-          it.labels.map((l) => `${sets.names[l]} ${Math.round(inf.mean[l] * 100)}%`).join(" · "),
+          ...(sm ? [] : [it.labels.map((l) => `${sets.names[l]} ${Math.round(inf.mean[l] * 100)}%`).join(" · ")]),
           ...comps.flatMap((c) => {
             const f = c.comp.get(it.key);
             if (!f) return [];
@@ -164,14 +231,18 @@ export default function UpsetMatrix({
             return top.length ? [`${c.cat.title}: ${top.map(([v, g]) => `${c.cat.names[g]} ${Math.round(v * 100)}%`).join(" · ")}`] : [];
           }),
           `e.g. ${inf.typical.map(title).join("; ")}`,
-          ...(it.expandable ? [it.expanded ? "▾ under the bar: fold the sub-columns" : "▸ under the bar: split by what they are near"] : []),
+          ...(sm ? [it.expanded ? "▾ under the bar: fold its columns" : `▸ under the bar: list its columns${sm.combos.length > LIST_MAX ? ` (the ${LIST_MAX} largest)` : ""}`]
+            : it.expandable ? [it.expanded ? "▾ under the bar: fold the sub-columns" : "▸ under the bar: split by what they are near"] : []),
         ];
         return (
           <g
             key={it.key} style={{ cursor: "pointer" }} onClick={() => onSelect(it.key)} opacity={nSel === 0 ? 0.35 : 1}
             onMouseMove={(ev) => tip(ev, head, lines)}
           >
-            <rect x={x} y={0} width={COL} height={H} fill={it.sub ? "var(--accent-bg)" : "transparent"} opacity={it.sub ? 0.55 : 1} />
+            <rect
+              x={x} y={0} width={COL} height={H}
+              fill={sm ? "var(--rule-2)" : it.sub || it.listedIn ? "var(--accent-bg)" : "transparent"} opacity={it.sub || it.listedIn ? 0.55 : 1}
+            />
             {activeKey === it.key && (
               <rect x={x + 1} y={2} width={COL - 2} height={H - 4} rx={3} fill="none" stroke="var(--ink)" strokeWidth={1.4} />
             )}
@@ -180,6 +251,12 @@ export default function UpsetMatrix({
             )}
             {nObs > 0 && <path d={barPath(topN, rrN)} fill="var(--accent)" fillOpacity={0.1} stroke="var(--accent)" strokeWidth={1} opacity={dim} />}
             {it.fuzzy > 0 && <path d={barPath(topF, rrF)} fill="var(--accent)" opacity={dim} />}
+            {cut && (
+              <g pointerEvents="none">
+                <path d={`M${cx - bw / 2 - 2},${topN + 13} l${bw + 4},-4 M${cx - bw / 2 - 2},${topN + 17} l${bw + 4},-4`} stroke="var(--panel)" strokeWidth={2.5} />
+                <text className="bar-lbl" {...(flip ? at(cx + 3, topN - 2) : at(cx, topN - 2))} textAnchor={flip ? "end" : "middle"}>{nObs}</text>
+              </g>
+            )}
             {it.sub?.kind === "mixed" && (
               <path d={`M${cx},${topN - 10} l4,4 l-4,4 l-4,-4 Z`} fill="var(--panel)" stroke="var(--ink)" strokeWidth={1.2} pointerEvents="none" />
             )}
@@ -199,8 +276,23 @@ export default function UpsetMatrix({
                 />
               </g>
             )}
+            {/* a summary: one partially filled disc per set */}
+            {sm && sets.names.map((n, l) => {
+              const cy = yDots + l * DOT_ROW + DOT_ROW / 2;
+              return (
+                <g
+                  key={l} opacity={selLabels && !selLabels.has(l) ? 0.3 : 1}
+                  onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${head} · ${n}`, [
+                    `${n} in the column of ${pctOf(sm.share[l])}% of its ${obsWord}`,
+                    `mean membership ${pctOf(inf.mean[l])}%`,
+                  ]))}
+                >
+                  <PartialDot cx={cx} cy={cy} share={sm.share[l]} />
+                </g>
+              );
+            })}
             {/* plain grey discs first, then the line joining the column's sets, then the rings and black dots over it */}
-            {[false, true].map((front) => (
+            {!sm && [false, true].map((front) => (
               <g key={String(front)}>
                 {front && ys.length > 1 && (
                   <line x1={cx} x2={cx} y1={Math.min(...ys)} y2={Math.max(...ys)} stroke="var(--ink)" strokeWidth={3} pointerEvents="none" />
@@ -289,12 +381,35 @@ export function UpsetLegend({ belowMode, minShare, tau, stat, hasAttrs, comps, o
             outline: number of {obsWord}
           </span>
           <span className="lg-row">
+            <svg width={14} height={14} aria-hidden="true">
+              <rect x={1.5} y={3.5} width={11} height={7} rx={2} fill="var(--accent)" fillOpacity={0.1} stroke="var(--accent)" />
+              <rect x={5} y={3.5} width={7.5} height={7} rx={2} fill="var(--accent)" />
+            </svg>
+            left of each set: {obsWord} reaching τ in it (outline) and the sum of their memberships (solid)
+          </span>
+          <span className="lg-row">
             <svg width={14} height={14} aria-hidden="true"><path d="M4.5,3.5 L10,7 L4.5,10.5 Z" fill="var(--accent)" /></svg>
             ▸ under a bar: split it by what they are near
           </span>
           <span className="lg-row">
             <svg width={14} height={14} aria-hidden="true"><path d="M7,2.5 l4,4 l-4,4 l-4,-4 Z" fill="var(--panel)" stroke="var(--ink)" strokeWidth={1.2} /></svg>
             mixed: near 3 or more other sets
+          </span>
+        </div>
+        <div className="lg">
+          <span className="lg-hd">Summaries (after the gap)</span>
+          <span className="lg-row">
+            <svg width={62} height={16} aria-hidden="true">
+              {[0.25, 0.5, 0.9].map((f, i) => <PartialDot key={i} cx={8 + i * 20} cy={8} share={f} />)}
+            </svg>
+            the columns not drawn individually, one summary per number of sets; a disc fills with the share of its {obsWord} in the set
+          </span>
+          <span className="lg-row">
+            <svg width={14} height={14} aria-hidden="true">
+              <rect x={3} y={1} width={8} height={13} rx={2} fill="var(--accent)" />
+              <path d="M1,8 l12,-3 M1,11 l12,-3" stroke="var(--panel)" strokeWidth={1.8} />
+            </svg>
+            cut bar: taller than the axis, its number on top
           </span>
         </div>
         <div className="lg">

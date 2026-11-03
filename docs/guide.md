@@ -49,14 +49,17 @@ Below it are three columns:
   bars growing sideways and the attributes as columns on the right. Press it again to go back.
 - **Display options** (popover; a dot marks settings that differ from the defaults):
   - **Sort by**: fuzzy size (default) or number of observations;
-  - **Min observations per column**: hides smaller columns (default 2);
+  - **Draw individually**: the largest columns (in the sort order) are drawn one by one until they hold 60 %, 80 %
+    (default), 90 % or all of the observations in some set; the others are summarised (see *Summaries* below);
+  - **Min observations to draw a column**: smaller columns go to the summaries instead (default 2);
   - **Attributes**: median (default) or mean;
   - **Near a set from**: ⅓ τ, ½ τ (default) or ¾ τ;
   - **Mark near sets from**: 10 %, 20 % (default) or 33 % of a column near a set, or none;
   - **single-set columns**: on by default; switch it off to keep only combinations.
 
-At most 50 columns are drawn; the summary line says "showing x of y columns" and how many observations are in no
-set.
+At most 50 columns are drawn individually; the summary line says "showing x of y columns (z % of the observations
+in them) + r in k summaries" and how many observations are in no set. Drawn columns and summaries together hold every
+observation in some set (except single-set columns, when they are switched off).
 
 ### The chart, top to bottom
 
@@ -65,11 +68,26 @@ observations**. Both share one axis, so the gap shows how weakly the observation
 many are pure and how many borderline. With a selection, a thin red bar inside shows how many selected observations
 the column holds.
 
+**Set bars.** Left of each set's name, two bars use the same encoding for the set as a whole. The **outline** is how
+many observations reach τ in the set, in *any* column that holds it (so "Comedy" here counts Comedy-only and Comedy &
+Romance movies alike, unlike the Comedy column). The **solid** bar is the sum of those observations' memberships in
+the set, never less than τ times their number. The set bars have their own scale (the largest set fills the
+strip). Hover for exact values and the mean membership. Flipped, they stand above the set names.
+
 **Sub-columns.** A column with borderline observations has a **▸** under its bar; click it to
 split the column into sub-columns, drawn right after it on a tinted background: the pure observations, then one
 sub-column per set (or pair of sets) they are near, largest first, then **mixed** (near 3 or more other sets, marked
 ◇) and **other** (patterns of a single observation, marked …). The sub-columns add up to the column. One column is
 split at a time; **▾** folds it. A sub-column can be clicked and selected like a column.
+
+**Summaries.** After a gap and a thin divider come the **summary columns**: the columns not drawn individually,
+pooled by their number of sets (1-set, 2-set, 3-set and 4+-set combinations, on a grey background). Their bars are the
+pooled fuzzy size and number of observations. The axis fits the individual columns, so a taller summary bar is cut
+by two white slashes, with its number printed on top. In the dot matrix, each set is a **partially filled disc**: it
+fills from the bottom with the share of the summary's observations whose column contains the set (half full = half
+of them). There is no joining line and no near rings. Composition and attributes are drawn as for any column. A
+summary can be clicked and selected; **▸** under its bar lists its columns (the 30 largest) right after it, each
+selectable like a column; **▾** folds them. The tooltip lists its three largest columns.
 
 **Dot matrix.** There is one row per set, with its colour swatch. Every slot is a disc of the same size. A black
 disc means the set is in the column; the discs of a column are joined by a line. Grey discs are sets outside the
@@ -153,3 +171,83 @@ observations with exactly that combination.
 - **Small columns.** Columns with few observations give noisy attribute values; check the count in the tooltip.
 - **The map is one projection.** Distances on a 2D map are approximate; use it to locate a selection, not to
   measure it.
+
+## 9. The mathematics
+
+This section states, in standard fuzzy-set terms, what the app computes. Notation: *X* is the set of observations,
+*A₁ … A_L* the fuzzy sets with membership functions μₗ : X → [0, 1]. The memberships are independent: nothing
+requires Σₗ μₗ(x) = 1. (The MovieLens sums range from about 1.4 to 8.3.)
+
+**α-cuts.** For the threshold τ, the (weak) α-cut of a set is the crisp set
+
+    Aₗ^τ = { x ∈ X : μₗ(x) ≥ τ }
+
+and the **signature** of an observation is the list of cuts it falls into, σ_τ(x) = { l : μₗ(x) ≥ τ }.
+
+**Columns are exclusive intersections of α-cuts.** For a combination S of sets, the column is
+
+    R_S^τ = ( ⋂_{l∈S} Aₗ^τ ) ∖ ( ⋃_{l∉S} Aₗ^τ ) = { x : σ_τ(x) = S }
+
+a crisp, exclusive region, as in a Venn diagram. The columns partition the observations, together with those in no set
+(σ = ∅). With the standard fuzzy intersection and union, μ_{A∩B} = min(μ_A, μ_B) and μ_{A∪B} = max(μ_A, μ_B),
+α-cuts commute with both: (A ∩ B)^τ = A^τ ∩ B^τ and (A ∪ B)^τ = A^τ ∪ B^τ. Hence
+
+    R_S^τ = ( ⋂_{l∈S} Aₗ )^τ ∖ ( ⋃_{l∉S} Aₗ )^τ
+
+A column is the α-cut of the fuzzy intersection of its sets, minus the α-cut of the fuzzy union of all the others.
+This holds for min and max only: with the product t-norm, (A · B)^τ ≠ A^τ ∩ B^τ in general, which is why the app uses
+min.
+
+**Strength, count and fuzzy size (column bars).** An observation's strength is its membership in the fuzzy intersection
+of its column's sets:
+
+    s_S(x) = min_{l∈S} μₗ(x) = μ_{⋂_{l∈S} Aₗ}(x)
+
+The outline bar is the count n_S = |R_S^τ|. The solid bar is a **sigma-count** (the scalar cardinality Σₓ μ(x) of a
+fuzzy set), taken over the column's observations only:
+
+    F_S = Σ_{x ∈ R_S^τ} μ_{⋂_{l∈S} Aₗ}(x),   with   τ · n_S ≤ F_S ≤ n_S
+
+because every strength in the column is at least τ.
+
+**Set bars.** For each set, the outline is the size of its α-cut, nₗ = |Aₗ^τ|. The solid bar is the sigma-count over
+that cut, Fₗ = Σ_{x ∈ Aₗ^τ} μₗ(x), with τ · nₗ ≤ Fₗ ≤ nₗ. The cut includes every column that holds the set, so
+nₗ = Σ_{S ∋ l} n_S.
+
+**Near: a band between two α-cuts.** With the near factor β (½ by default; ⅓ or ¾ in Display options),
+
+    Nₗ = Aₗ^{βτ} ∖ Aₗ^τ = { x : βτ ≤ μₗ(x) < τ }
+
+Every membership is thus **in** (≥ τ), **near** (in [βτ, τ)) or **out** (< βτ). This three-way split resembles
+Pedrycz's shadowed sets, which turn a fuzzy set into {0, shadow, 1}; "near" is the shadow. An observation's near
+pattern is { l ∉ σ_τ(x) : x ∈ Nₗ }, and the sub-columns group a column by it.
+
+**Rings.** For a column S and a set l outside it, the dot matrix uses the share of the column in the band,
+ρ = |R_S^τ ∩ Nₗ| / n_S (a ring appears when ρ reaches the "mark near sets" level), and the column's mean membership,
+m = (1 / n_S) Σ_{x ∈ R_S^τ} μₗ(x), which sets the size of the ring's hole on 0 → τ.
+
+**Barcode.** It plots n_S(τ) = |R_S^τ| over a grid of τ. This follows the decomposition (resolution) theorem: a fuzzy
+set is described by the family of its α-cuts, A = ⋃_α α · A^α. The barcode shows that family for every combination.
+
+**Summaries.** A summary column of degree d pools the columns with |S| = d (or ≥ 4) that are not drawn individually:
+its count and fuzzy size are the sums of theirs. A set's partial disc shows Σ_{S ∋ l} n_S / Σ_S n_S over the pooled
+columns.
+
+**What the app does not compute.** A fully fuzzy version of a column would itself be a fuzzy set, using the fuzzy
+complement 1 − μ:
+
+    μ_{R_S}(x) = min( min_{l∈S} μₗ(x), min_{l∉S} (1 − μₗ(x)) )
+
+Each observation would then belong partly to several columns. Take an observation with Comedy 0.9 and Romance 0.49 at
+τ = 0.5:
+
+| | The app | Fully fuzzy |
+|---|---|---|
+| Comedy only | the observation, strength 0.9 | min(0.9, 1 − 0.49) = 0.51 |
+| Comedy & Romance | nothing | min(0.9, 0.49) = 0.49 |
+
+The app keeps each observation in exactly one column, so columns can be counted, selected and linked to the map. It
+records the 0.49 as **near Romance**, shown by the ring and the sub-column. The near encoding carries the information
+the complement term would have carried. Fuzzy unions, other t-norms (product, Łukasiewicz) and the fully fuzzy regions
+are not computed.
+
