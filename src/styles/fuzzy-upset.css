@@ -1,0 +1,156 @@
+/* Fuzzy UpSet panel (Upset.tsx), the map (MapView.tsx) and the right panel. Uses the theme tokens from theme.css. */
+/* Controls: one row, small uppercase labels to the left of each control, so the block stays under ~1/8 of the screen;
+   the less-used display settings live in the "Display options" popover */
+.fc { display: grid; gap: 6px; margin: 2px 0 26px; }
+.fc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; min-height: 26px; }
+.fc-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fc-lbl { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+.fc .seg button { font-size: 10.5px; padding: 4px 8px; }
+.fc .seg button:disabled, .fu-check:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.fc input[type=range] { width: 96px; margin: 0; }
+.fc .val { font-size: 11px; min-width: 28px; font-variant-numeric: tabular-nums; }
+.fc .fc-hint { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.fc select, .fc-pop input[type=number], .fc-btn { font-family: "Poppins", system-ui, sans-serif; font-size: 11px; height: 24px;
+  border: 1px solid var(--rule); border-radius: 3px; background: var(--panel); color: var(--ink); padding: 0 6px; }
+.fc-pop-wrap { position: relative; margin-left: auto; }
+.fc-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--accent); white-space: nowrap; }
+.fc-btn:hover, .fc-btn[aria-expanded=true], .fc-btn[aria-pressed=true] { border-color: var(--accent); background: var(--accent-bg); }
+.fc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.fc-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 9; width: min(440px, calc(100vw - 48px)); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 4px; box-shadow: 0 6px 20px rgba(22, 25, 29, .12); padding: 10px 12px; }
+.fc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: end; }
+.fc-grid .ctrl { min-width: 0; }
+.fc-grid select { width: 100%; max-width: none; }
+.fc-pop input[type=number] { width: 64px; }
+.fu-check { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-2); }
+.fu-status { margin: 0 0 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fu-clear { padding: 2px 8px; color: var(--accent); border-color: var(--accent); }
+.fu-clear:hover { background: var(--accent-bg); }
+.fu-status strong { font-weight: 500; }
+/* The UpSet scrolls sideways inside its column when it has many columns */
+.fu-scroll { overflow-x: auto; max-width: 100%; }
+
+/* The panel is a column: controls, summary, chart, and the legend pinned to the bottom of the column */
+.col-upset { display: flex; flex-direction: column; container: upset / inline-size; }
+.fu { flex: 1 0 auto; display: flex; flex-direction: column; }
+.fu-scroll { margin-bottom: 12px; }
+/* composition tray under the chart: the variables shown as rows (draggable to reorder, ✕ to remove), then the others
+   (drag onto the tray or the chart, or click, to add a row) */
+.comp-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 20px; padding: 6px 8px;
+  border: 1px dashed transparent; border-radius: 4px; }
+.comp-tray-drop { border-color: var(--accent); background: var(--accent-bg); }
+.comp-chip { cursor: grab; padding: 3px 4px 3px 8px; color: var(--ink); }
+.comp-chip:active { cursor: grabbing; }
+.comp-chip svg { width: 10px; height: 10px; flex: none; }
+.comp-x { all: unset; cursor: pointer; padding: 0 4px; color: var(--ink-3); font-size: 10px; }
+.comp-x:hover, .comp-x:focus-visible { color: var(--accent); }
+.comp-hint { font-size: 10.5px; color: var(--ink-3); margin-left: 6px; }
+.comp-avail { border-style: dashed; cursor: grab; padding: 3px 8px; }
+.comp-avail:disabled { opacity: .45; cursor: not-allowed; }
+/* the observation count, right-aligned and small */
+.fu-count { margin-left: auto; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+/* Legend: a compact rectangle with a discreet border, centred, as low as the column allows */
+.legend-box { margin: auto auto 0; width: fit-content; max-width: 100%; border: 1px solid var(--rule-2); border-radius: 4px;
+  padding: 8px 14px 10px; background: var(--panel); }
+.legend-title { margin: 0 0 6px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--title); }
+.legend-grid { display: grid; grid-template-columns: repeat(2, auto); gap: 8px 24px; }
+@container upset (max-width: 540px) { .legend-grid { grid-template-columns: auto; } }
+.lg { display: grid; gap: 2px; min-width: 0; max-width: 240px; align-content: start; }
+
+.lg-hd { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.lg-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-2); line-height: 1.35; }
+.lg-row svg { flex: none; width: auto; height: auto; }
+.lg-swatches { flex-wrap: wrap; gap: 4px 12px; }
+.lg-swatches span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* the UpSet is drawn at its natural size (column width is fixed) and scrolls sideways when wide;
+   overrides the global svg { width: 100%; height: auto } that would stretch it */
+.fu svg { width: auto; height: auto; }
+.fu-scroll svg { display: block; }
+.fu-axis { stroke: var(--rule); }
+/* text buttons ("Back to the defaults") */
+.fu-link { all: unset; cursor: pointer; font-size: 11px; color: var(--accent); white-space: nowrap; }
+.fu-link:hover { text-decoration: underline; }
+.fu-link:focus-visible { outline: 2px solid var(--accent); }
+/* numbers inside the attribute heatmap cells */
+.fu-attr-val { font-family: "Poppins", system-ui, sans-serif; font-size: 7.5px; font-weight: 500; pointer-events: none; }
+/* observation picked on the map: shown in the summary line, its column marked in the plot */
+.fu-pick { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); border: 1px solid var(--accent);
+  border-radius: 3px; padding: 1px 4px 1px 7px; }
+.fu-pick strong { color: var(--ink); font-weight: 500; }
+.fu-pick-x { all: unset; cursor: pointer; padding: 0 4px; color: var(--accent); }
+.fu-pick-x:focus-visible { outline: 2px solid var(--accent); }
+/* right column */
+.col-viz { padding: 10px 12px; }
+.sk-note { flex-basis: 100%; margin: 0; font-size: 10.5px; color: var(--ink-3); line-height: 1.4; }
+/* right column: tabs (Membership | Barcode) over the active view, which fills the rest of the column */
+.rt { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.rt-host { height: 100%; }
+.rt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
+.rt-tabs { flex-wrap: wrap; }
+.rt-tabs { align-self: flex-start; }
+.rt-big-btn { margin-left: auto; padding: 3px 9px; }
+/* large view: the active right-column view over the page (Esc, ✕ or a click outside closes it) */
+.big-overlay { position: fixed; inset: 0; z-index: 30; display: flex; padding: 28px 36px; background: rgba(22, 25, 29, .35); }
+.rt-big { flex: 1 1 auto; height: auto; background: var(--panel); border-radius: 6px; padding: 16px 20px;
+  box-shadow: 0 12px 40px rgba(22, 25, 29, .25); }
+.rt-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.rt-tabs button { font-size: 11px; padding: 4px 12px; }
+.rt-body { flex: 1 1 auto; min-height: 0; position: relative; overflow-y: auto; }
+/* the tabs stay put; only the active view scrolls */
+@media (min-width: 901px) { .col-viz { overflow: hidden; } }
+/* membership view (MembershipStrip.tsx): one summary row per set, expandable into one bar per observation */
+.ms { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ms-head { margin-bottom: 8px; }
+.ms-head .panel-title { margin: 0 0 2px; }
+.ms-tools { display: flex; gap: 12px; margin-top: 4px; }
+.ms-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.ms-group-row { padding: 3px 0; border-bottom: 1px solid var(--rule-2); }
+.ms-dim { opacity: .35; }
+.ms-sum { display: grid; grid-template-columns: minmax(0, 42%) minmax(0, 1fr) 28px; align-items: center; gap: 6px; }
+.ms-name { all: unset; cursor: pointer; font-size: 10.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-name:focus-visible { outline: 2px solid var(--accent); }
+.ms-chev { display: inline-block; width: 10px; color: var(--ink-3); }
+.ms-n { color: var(--ink-3); }
+.ms-bar { position: relative; display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: var(--rule-2); cursor: pointer; }
+.ms-bar span { height: 100%; }
+.ms-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ms-tau { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed rgba(22, 25, 29, .6); }
+.ms-out { height: 6px; background: var(--rule-2); border-radius: 2px; overflow: hidden; }
+.ms-out span { display: block; height: 100%; background: var(--ink-3); }
+.ms-obs { margin: 4px 0 2px 16px; }
+/* τ barcode (TauBarcode.tsx) */
+.tb svg { width: auto; height: auto; display: block; overflow: visible; }
+.tb-axis { font-size: 9px; fill: var(--ink-3); }
+.tb-now { fill: var(--accent); font-weight: 600; }
+.tb-name { font-size: 10px; fill: var(--ink); cursor: pointer; }
+.tb-name:hover, .tb-sel { fill: var(--accent); font-weight: 600; }
+.rt-tabs button { padding: 4px 9px; }
+.tb-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tb-title { align-items: flex-start; }
+.tb-title .panel-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+/* how many observations are selected (any view), in the UpSet summary line */
+.fu-selinfo { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); }
+.fu-selinfo i { width: 9px; height: 9px; border-radius: 2px; background: var(--select); display: inline-block; }
+.fc-sets { font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.fc .seg button:disabled, .fc input[type=range]:disabled { opacity: .45; cursor: not-allowed; }
+.fc-reset { display: block; margin-top: 10px; }
+/* dataset size, notes and attribution under the UpSet */
+.data-note { margin: 14px 0 0; font-size: 10.5px; color: var(--ink-3); line-height: 1.45; }
+.data-src { display: block; margin-top: 2px; }
+
+/* Map column (MapView.tsx): colour switch + legend, then the map at the column's width */
+.mv { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mv-head { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: 6px 10px; }
+.mv-head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
+.mv-head-row .legend-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-head .ctrl { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.mv-head .ctrl label { font-size: 9px; }
+.mv-head .seg { flex-wrap: wrap; }
+.mv-head .seg button { font-size: 10.5px; padding: 3px 8px; }
+.mv-legend { margin-top: 6px; max-height: 58px; overflow-y: auto; gap: 2px 10px; line-height: 18px; }
+.mv-panel { margin: 0; border: 1px solid var(--rule-2); border-radius: 3px; background: var(--panel); padding: 2px;
+  user-select: none; -webkit-user-select: none; } /* dragging a selection rectangle must not select text */
+.mv-panel figcaption { font-size: 10px; line-height: 14px; color: var(--ink-3); padding: 0 4px; }
+.mv-panel svg { width: 100%; height: auto; }
+.mv-note { margin: 0; font-size: 10.5px; color: var(--ink-3); }

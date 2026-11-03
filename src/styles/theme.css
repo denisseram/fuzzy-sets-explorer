@@ -1,0 +1,144 @@
+/* Brand palette: navy #282C5F, green #2E6550, amber #EAAA40, plus white, black and grey.
+   Data colours (categories, ramps) live in src/lib/palette.ts. */
+
+:root {
+  --navy: #282C5F;
+  --green: #2E6550;
+  --amber: #EAAA40;
+  /* the linked selection (cells chosen in any view): a bright red, unlike every data colour (yellow means glyphs and
+     a category already) */
+  --select: #E4002B;
+  --ground: #F7F7F8;
+  --panel: #FFFFFF;
+  --ink: #16191D;
+  --ink-2: #4A4D57;
+  --ink-3: #6B6E78;
+  --title: var(--navy);
+  --rule: #E4E5EA;
+  --rule-2: #ECEDF1;
+  /* the ring on a set a column is near (almost belongs to), in the UpSet's dot matrix */
+  --near-ring: #8C9099;
+  /* navy: titles, sliders, bars, focus and selection outlines */
+  --accent: var(--navy);
+  --accent-bg: #ECEEF7;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Poppins", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: 14px 16px; }
+.panel-title { font-family: "Poppins", system-ui, sans-serif; font-size: 11px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--title); font-weight: 600; margin: 0 0 2px; }
+.panel-note { font-size: 12px; color: var(--ink-2); margin: 0 0 8px; }
+
+.ctrl { display: flex; flex-direction: column; gap: 3px; }
+.ctrl label { font-family: "Poppins", system-ui, sans-serif; font-size: 10px; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3); }
+.ctrl-row { display: flex; align-items: center; gap: 8px; }
+input[type=range] { width: 104px; accent-color: var(--accent); }
+/* one accent (navy) for every selection state: segments, chips, sliders, checkboxes, radios, focus rings */
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+.val { font-family: "Poppins", system-ui, sans-serif; font-size: 12px; color: var(--ink); min-width: 38px; }
+
+.seg { display: inline-flex; border: 1px solid var(--rule-2); border-radius: 2px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); font-family: "Poppins", system-ui, sans-serif; font-size: 11px;
+  padding: 5px 11px; cursor: pointer; color: var(--ink-2); border-right: 1px solid var(--rule-2); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed=true] { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.chip { border: 1px solid var(--rule-2); background: var(--panel); border-radius: 2px; cursor: pointer;
+  font-family: "Poppins", system-ui, sans-serif; font-size: 11px; padding: 5px 10px; color: var(--ink-2);
+  display: inline-flex; align-items: center; gap: 6px; }
+.chip[aria-pressed=true] { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.bar-lbl { font-family: "Poppins", system-ui, sans-serif; font-size: 10px; fill: var(--ink-2); }
+.bar-hd { font-family: "Poppins", system-ui, sans-serif; font-size: 9px; fill: var(--ink-3); }
+
+.dot-tip { position: fixed; pointer-events: none; background: var(--ink); color: #fff; font-family: "Poppins", system-ui, sans-serif;
+  font-size: 11px; padding: 7px 9px; border-radius: 3px; z-index: 10; line-height: 1.6; white-space: nowrap; }
+.dot-tip-hd { font-weight: 500; margin-bottom: 2px; }
+.dot-tip-hint { opacity: .65; font-size: 10px; margin-top: 2px; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-family: "Poppins", system-ui, sans-serif; font-size: 10px;
+  color: var(--ink-3); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+select { font-family: "Poppins", system-ui, sans-serif; font-size: 12px; padding: 4px 6px; border: 1px solid var(--rule-2);
+  border-radius: 2px; background: var(--panel); color: var(--ink); max-width: 220px; }
+/* ---- App shell: slim title bar over three columns (UpSet · map · memberships / barcode) ---------------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.app { height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.titlebar { display: flex; align-items: center; justify-content: flex-start; flex-wrap: nowrap; gap: 8px; padding: 4px 8px;
+  margin: 0; background: var(--navy); border-bottom: 0; color: #fff; min-height: 36px; position: relative; z-index: 8; }
+.logo-slot { width: 96px; height: 26px; flex: none; }
+.ds { position: relative; }
+.ds-btn, .theme-btn, .info-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule);
+  background: var(--panel); color: var(--accent); border-radius: 3px; cursor: pointer;
+  font-family: "Poppins", system-ui, sans-serif; font-size: 12px; padding: 3px 9px; }
+.titlebar .ds-btn, .titlebar .theme-btn { background: transparent; border-color: rgba(255, 255, 255, .55); color: #fff; }
+.titlebar .ds-btn:hover { border-color: #fff; background: rgba(255, 255, 255, .08); }
+.titlebar .ds-btn:focus-visible, .titlebar .theme-btn:focus-visible { outline-color: #fff; }
+.ds-btn:focus-visible, .theme-btn:focus-visible, .info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ds-name { color: inherit; font-weight: 500; }
+.ds-pop { position: absolute; top: calc(100% + 6px); left: 0; width: min(340px, calc(100vw - 32px)); background: var(--panel); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 4px; box-shadow: 0 6px 24px rgba(22, 25, 29, .12); padding: 12px 14px; }
+.ds-list { display: grid; gap: 4px; margin-top: 6px; }
+.ds-opt { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+.ds-opt input { accent-color: var(--accent); margin: 0; }
+.ds-desc { margin: 10px 0 0; }
+.theme-btn { margin-left: auto; padding: 4px 7px; }
+.theme-btn:disabled { cursor: not-allowed; opacity: .5; }
+
+.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px; min-height: 0; }
+.col { min-height: 0; overflow: auto; }
+.col-upset { padding: 10px 12px; }
+.col-map { padding: 0; }
+.col-viz { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
+.col-upset .panel-title { display: flex; align-items: center; gap: 6px; }
+
+.info { position: relative; display: inline-flex; }
+.info-btn { border: 0; padding: 0; background: transparent; color: var(--ink-3); }
+.info-btn:hover, .info-btn[aria-expanded=true] { color: var(--accent); }
+.info-pop { position: absolute; top: calc(100% + 6px); left: -8px; z-index: 9; width: min(520px, calc(100vw - 48px));
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; box-shadow: 0 6px 24px rgba(22, 25, 29, .12);
+  padding: 10px 12px; margin: 0; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-2); line-height: 1.55; }
+
+/* Narrow screens: one column after the other, the page scrolls. */
+@media (max-width: 900px) {
+  .app { height: auto; min-height: 100vh; }
+  .cols { grid-template-columns: minmax(0, 1fr); padding: 8px 16px 16px; }
+  .col { overflow: visible; }
+  .col-upset { overflow-x: auto; }
+  .col-viz { min-height: 160px; }
+}
+/* the empty logo slot is outlined only while developing */
+.dev .logo-slot { outline: 1px dashed rgba(255, 255, 255, .4); }
+/* icons keep their own size (the global svg rule stretches to 100%) */
+.titlebar svg, .info svg { width: 14px; height: 14px; flex: none; }
+/* dataset button icon: public/dataset_icon.svg used as a mask, filled with the text colour (white on the navy bar) */
+.ds-icon { width: 16px; height: 16px; flex: none; background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+/* "Loading the dataset…" while a dataset is fetched */
+.loading { position: fixed; inset: 36px 0 0 0; z-index: 7; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(247, 247, 248, .75); font-size: 13px; color: var(--ink-2); }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--accent-bg); border-top-color: var(--accent);
+  animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Greek τ stays lower case inside upper-case labels (its capital looks like a Latin T) */
+.keep-case { text-transform: none; }

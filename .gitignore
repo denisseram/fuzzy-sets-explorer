@@ -1,0 +1,29 @@
+# build output
+dist/
+
+# generated types
+.astro/
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+
+# environment variables
+.env
+.env.production
+
+# macOS-specific files
+.DS_Store
+
+# jetbrains setting folder
+.idea/
+
+# Raw downloads (MovieLens ml-32m, Tag Genome 2021, UpSet movies). Only the small derived exports in
+# public/data/ are committed: the site is built from the repo and needs them.
+data-raw/
+
+# Python
+__pycache__/
+*.pyc
