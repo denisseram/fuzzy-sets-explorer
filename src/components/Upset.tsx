@@ -5,7 +5,7 @@ import { cellsForKeys, composition, fractionsOf, meanOver, nearShare, NONE, setS
 import { tauGrid, tauSweep } from "../lib/fuzzyViews";
 import { OTHER } from "../lib/palette";
 import { DEG_MAX, degreeSummaries, parentKey, upsetModel, visibleColumns } from "../lib/upsetModel";
-import { attrScales } from "./attrHeatmap";
+import { attrDensity, attrScales } from "./attrHeatmap";
 import MapView from "./MapView";
 import MembershipStrip, { type StripGroup } from "./MembershipStrip";
 import TauBarcode from "./TauBarcode";
@@ -143,11 +143,12 @@ export default function Upset({ mapEl = null, vizEl = null }: {
         near: nearShare(sets.P, idx, L, tau, nearLevel),
         typical: [...idx].sort((a, b) => model.sig.strength[b] - model.sig.strength[a]).slice(0, 3),
         attr: attrs.map((a) => summarise(a.values, idx, a.log)),
+        dens: attrs.map((a, r) => (a.plot === "density" ? attrDensity(a, idx, scales[r]) : null)),
         groups: c.sub || c.summary || c.nBorder === 0 ? null : model.groups(c.key),
       });
     }
     return m;
-  }, [cols, colIdx, model, sets, L, attrs, tau, nearLevel]);
+  }, [cols, colIdx, model, sets, L, attrs, scales, tau, nearLevel]);
 
   // ---- composition rows: the share of each column's observations in each category ---------------------------
   const catKeys = ds.categories.map((c) => c.key);

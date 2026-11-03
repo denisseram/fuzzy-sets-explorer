@@ -1,6 +1,6 @@
 // Numbers and scales of the attribute heatmap.
 import { describe, expect, it } from "vitest";
-import { attrLabel, attrScales, attrT, fmtAttr, shortAttr } from "./attrHeatmap";
+import { attrDensity, attrLabel, attrScales, attrT, DENS_BINS, fmtAttr, shortAttr } from "./attrHeatmap";
 
 const rating = { key: "r", title: "mean rating", unit: "★", digits: 2, values: [] as number[] };
 const pct = { key: "p", title: "rated ≥ 4★", unit: "%", digits: 0, values: [] as number[] };
@@ -34,5 +34,16 @@ describe("attribute heatmap", () => {
     expect(attrLabel(vals, s)).toBe("mean rating .25–4.8");
     expect(attrLabel(pct, { lo: 18, hi: 77 })).toBe("rated ≥ 4★ 18–77%");
     expect(attrLabel(year, { lo: 1959, hi: 2007 })).toBe("release year 1959–2007");
+  });
+  it("density: full range, sums to 1, mass where the values are", () => {
+    const yrs = { ...year, plot: "density" as const, values: [1920, 1990, 1990, 1990, 2000] };
+    const [s] = attrScales([yrs]);
+    expect(s).toEqual({ lo: 1920, hi: 2000 });
+    const d = attrDensity(yrs, [1, 2, 3, 4], s)!;
+    expect(d.length).toBe(DENS_BINS);
+    expect(d.reduce((t, v) => t + v, 0)).toBeCloseTo(1, 10);
+    expect(d.indexOf(Math.max(...d))).toBe(Math.round((DENS_BINS - 1) * (70 / 80))); // at 1990
+    expect(d[0]).toBeLessThan(1e-6); // nothing near 1920 in this column
+    expect(attrDensity(yrs, [], s)).toBeNull();
   });
 });

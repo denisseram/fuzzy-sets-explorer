@@ -3,11 +3,13 @@ import { holeRadius, nearMarked, type NearGroup, type summarise } from "../lib/f
 import { inkOn } from "../lib/colors";
 import type { DegreeSummary } from "../lib/upsetModel";
 import { OTHER } from "../lib/palette";
-import { attrColor, attrLabel, attrT, fmtAttr, shortAttr, statOf, type AttrScale, type AttrStat } from "./attrHeatmap";
+import { attrColor, attrLabel, attrT, DENS_BINS, fmtAttr, shortAttr, statOf, type AttrScale, type AttrStat } from "./attrHeatmap";
 import { compFill } from "./upsetPatterns";
 import type { BelowMode } from "./UpsetControls";
 
 const COL = 26, BAR_H = 110, DOT_ROW = 20, COMP_H = 40, ATTR_H = 14;
+/** Height of a density attribute row. */
+const DENS_H = 40;
 /** Every slot of the dot matrix is a disc of radius DOT_R. A ring is the same disc in grey with a white hole whose
  *  radius (HOLE_MIN to HOLE_MAX) shrinks as the column's mean membership in the set rises towards τ. */
 const DOT_R = 6.5, HOLE_MIN = 1.5, HOLE_MAX = 5;
@@ -66,7 +68,7 @@ export type Column = {
 };
 /** Per drawn column: its observations, mean membership and share near each set, typical observations, attribute
  *  summaries and (for a column) its sub-column groups. */
-export type ColumnInfo = { idx: number[]; mean: number[]; near: number[]; typical: number[]; attr: Summary[]; groups: NearGroup[] | null };
+export type ColumnInfo = { idx: number[]; mean: number[]; near: number[]; typical: number[]; attr: Summary[]; dens: (Float64Array | null)[]; groups: NearGroup[] | null };
 export type Comp = { cat: Category; comp: Map<string, number[]> };
 export type Tip = (ev: React.MouseEvent, title: string, lines: string[]) => void;
 
@@ -135,7 +137,10 @@ export default function UpsetMatrix({
   const yDots = yBase + 12;
   const yComp = yDots + L * DOT_ROW + 10;
   const yAttr = yComp + comps.length * (COMP_H + 8);
-  const H = yAttr + (attrs.length ? attrs.length * aH + 6 : 0);
+  // attribute rows: a heatmap cell, or a taller density plot
+  const rowH = attrs.map((a) => (a.plot === "density" ? DENS_H : aH));
+  const rowY = rowH.map((_, r) => yAttr + rowH.slice(0, r).reduce((t, h) => t + h, 0));
+  const H = yAttr + (attrs.length ? rowH.reduce((t, h) => t + h, 0) + 6 : 0);
   // column positions: a gap before the first summary
   const firstSum = shown.findIndex((it) => it.summary);
   const xOf = (i: number) => LEFT + i * COL + (firstSum >= 0 && i >= firstSum ? GAP : 0);
@@ -195,7 +200,7 @@ export default function UpsetMatrix({
         <text key={c.cat.key} className="bar-hd" {...at(LEFT - 8, yComp + r * (COMP_H + 8) + COMP_H / 2 + 3, true)} textAnchor={side}>by {c.cat.title}</text>
       ))}
       {attrs.map((a, r) => (
-        <text key={a.key} className="bar-lbl" {...at(LEFT - 8, yAttr + r * aH + aH / 2 + 3, true)} textAnchor={side}>{attrLabel(a, scales[r])}</text>
+        <text key={a.key} className="bar-lbl" {...at(LEFT - 8, rowY[r] + rowH[r] / 2 + 3, true)} textAnchor={side}>{attrLabel(a, scales[r])}</text>
       ))}
 
       {shown.map((it, i) => {
@@ -339,14 +344,35 @@ export default function UpsetMatrix({
               const s = inf.attr[r];
               const all = attrAll[r];
               if (!s || !all) return null;
+              const d = inf.dens[r];
+              if (a.plot === "density" && d) {
+                // one solid density of the column's values, scaled to its own peak: the value runs up the row (flipped,
+                // left to right) and the density grows from a baseline at the left (flipped, at the bottom)
+                const y0 = rowY[r] + 2, h = rowH[r] - 4, base = flip ? x + COL - 2 : x + 2, w = (COL - 4) * (flip ? -1 : 1);
+                const vy = (t: number) => (flip ? y0 + t * h : y0 + h - t * h);
+                const peak = Math.max(...d, 1e-12);
+                const path = `M${base},${vy(0)}` + Array.from(d, (v, b) => `L${base + (v / peak) * w},${vy(b / (DENS_BINS - 1))}`).join("") + `L${base},${vy(1)}Z`;
+                return (
+                  <g
+                    key={a.key}
+                    onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${head} · ${a.title}`, [
+                      `median ${fmtAttr(a, s.median)} (middle half ${fmtAttr(a, s.q1)}–${fmtAttr(a, s.q3)})`,
+                      `all ${obsWord}: median ${fmtAttr(a, all.median)}`,
+                    ]))}
+                  >
+                    <rect x={x + 1} y={rowY[r]} width={COL - 2} height={rowH[r] - 1} rx={1.5} fill="var(--rule-2)" opacity={0.6} />
+                    <path d={path} fill="var(--accent)" />
+                  </g>
+                );
+              }
               const bg = attrColor(attrT(scales[r], statOf(s, stat)));
               return (
                 <g
                   key={a.key}
                   onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${head} · ${a.title}`, [`${stat} ${fmtAttr(a, statOf(s, stat))} (all: ${fmtAttr(a, statOf(all, stat))})`]))}
                 >
-                  <rect x={x + 1} y={yAttr + r * aH} width={COL - 2} height={aH - 1} rx={1.5} fill={bg} />
-                  <text className="fu-attr-val" {...(flip ? at(cx + 3, yAttr + r * aH + aH / 2) : at(cx, yAttr + r * aH + aH / 2 + 2.5))} textAnchor="middle" fill={inkOn(bg)}>
+                  <rect x={x + 1} y={rowY[r]} width={COL - 2} height={rowH[r] - 1} rx={1.5} fill={bg} />
+                  <text className="fu-attr-val" {...(flip ? at(cx + 3, rowY[r] + rowH[r] / 2) : at(cx, rowY[r] + rowH[r] / 2 + 2.5))} textAnchor="middle" fill={inkOn(bg)}>
                     {shortAttr(a, statOf(s, stat))}
                   </text>
                 </g>

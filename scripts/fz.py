@@ -36,7 +36,8 @@ def write_fz(
     obs_word: what the observations are called, plural ("movies").
     kind: "graded" (memberships anywhere in 0–1) or "crisp" (0 or 1 only).
     categories: {key: {"title", "names", "codes"}} — one crisp label per observation (composition, colour).
-    numeric: [{"key", "title", "unit", "digits", "log"?, "values"}] — summarised per UpSet column.
+    numeric: [{"key", "title", "unit", "digits", "log"?, "plot"?, "values"}] — summarised per UpSet column; "plot": "density"
+      draws a density plot per column instead of a heatmap cell.
     """
     N, L = membership.shape
     assert kind in ("graded", "crisp"), kind

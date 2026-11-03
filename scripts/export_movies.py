@@ -93,8 +93,7 @@ def main() -> None:
         numeric=[
             {"key": "avg_rating", "title": "average rating", "unit": "★", "digits": 2, "values": df.AvgRating.round(4).tolist()},
             {"key": "watches", "title": "times watched", "unit": "", "digits": 0, "log": True, "values": df.Watches.astype(int).tolist()},
-            {"key": "year", "title": "release year", "unit": "", "digits": 0, "values": year.astype(int).tolist()},
-            {"key": "n_genres", "title": "number of genres", "unit": "", "digits": 0, "values": M.sum(1).astype(int).tolist()},
+            {"key": "year", "title": "release year", "unit": "", "digits": 0, "plot": "density", "values": year.astype(int).tolist()},
         ],
         map_xy=P,
         map_name="PCA · genres + attributes",

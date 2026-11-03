@@ -36,6 +36,8 @@ export type NumericAttr = {
   digits: number;
   /** Compare on a log scale (counts spanning orders of magnitude). */
   log?: boolean;
+  /** Draw a density plot per column instead of a heatmap cell (e.g. release year). */
+  plot?: "density";
   values: ArrayLike<number>;
 };
 

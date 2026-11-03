@@ -15,13 +15,36 @@ export const statOf = (s: { median: number; mean: number }, stat: AttrStat) => (
 
 export type AttrScale = { lo: number; hi: number };
 
-/** Per attribute, the 5th–95th percentile of all observations (on a log10 scale for log attributes). */
+/** Per attribute, the 5th–95th percentile of all observations (on a log10 scale for log attributes); a density
+ *  attribute spans its full range instead, so no observation falls off the plot. */
 export function attrScales(attrs: NumericAttr[]): AttrScale[] {
   return attrs.map((a) => {
     const v = Float64Array.from({ length: a.values.length }, (_, i) => (a.log ? Math.log10(a.values[i]) : a.values[i])).sort();
     const q = (p: number) => v[Math.min(v.length - 1, Math.max(0, Math.round((v.length - 1) * p)))];
-    return { lo: q(0.05), hi: q(0.95) };
+    return a.plot === "density" ? { lo: v[0], hi: v[v.length - 1] } : { lo: q(0.05), hi: q(0.95) };
   });
+}
+
+export const DENS_BINS = 40;
+
+/** Gaussian kernel density of the observations idx over the scale, at DENS_BINS points from lo to hi, normalised to
+ *  sum 1 (so the densities of a selection and of all observations share one axis). Bandwidth: 1/20 of the range. */
+export function attrDensity(a: NumericAttr, idx: ArrayLike<number>, s: AttrScale): Float64Array | null {
+  if (!idx.length) return null;
+  const span = Math.max(s.hi - s.lo, 1e-12), h = span / 20, step = span / (DENS_BINS - 1);
+  const d = new Float64Array(DENS_BINS);
+  for (let c = 0; c < idx.length; c++) {
+    const v = a.log ? Math.log10(a.values[idx[c]]) : a.values[idx[c]];
+    // the kernel is negligible beyond 3 bandwidths
+    const b0 = Math.max(0, Math.ceil((v - 3 * h - s.lo) / step)), b1 = Math.min(DENS_BINS - 1, Math.floor((v + 3 * h - s.lo) / step));
+    for (let b = b0; b <= b1; b++) {
+      const z = (s.lo + b * step - v) / h;
+      d[b] += Math.exp(-0.5 * z * z);
+    }
+  }
+  const sum = d.reduce((t, v) => t + v, 0);
+  if (sum > 0) for (let b = 0; b < DENS_BINS; b++) d[b] /= sum;
+  return d;
 }
 
 /** Position of v on the scale, 0 (light) … 1 (dark). */

@@ -111,6 +111,12 @@ attribute's own scale, from the 5th to the 95th percentile of all observations a
 viridis (light = low, dark = high). Log attributes (such as the number of ratings) use the median of log10
 values.
 
+**Density rows.** An attribute the dataset marks as a density (UpSet movies: release year) gets a taller row with one
+solid density plot per column instead of a heatmap cell: the value runs up the row, from the lowest to the highest
+value of all observations (flipped, from left to right). It is a Gaussian kernel density (bandwidth 1/20 of the full
+range) scaled to the column's own peak, so columns compare by shape, not size; the bars above give the size. Hover for
+the column's median and middle half.
+
 ### Interaction
 
 - **Click a column** (or sub-column) to select its observations and highlight them on the map; click again to
