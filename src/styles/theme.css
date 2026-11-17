@@ -16,11 +16,13 @@
   --title: var(--navy);
   --rule: #E4E5EA;
   --rule-2: #ECEDF1;
-  /* the ring on a set a column is near (almost belongs to), in the UpSet's dot matrix */
+  /* the ring on a set outside a row that its contributors nearly reach (threshold mode) */
   --near-ring: #8C9099;
   /* navy: titles, sliders, bars, focus and selection outlines */
   --accent: var(--navy);
   --accent-bg: #ECEEF7;
+  /* histogram axes: thin and light, so they are never confused with the connector (ink) */
+  --axis: #C4C7CF;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -81,7 +83,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 select { font-family: "Poppins", system-ui, sans-serif; font-size: 12px; padding: 4px 6px; border: 1px solid var(--rule-2);
   border-radius: 2px; background: var(--panel); color: var(--ink); max-width: 220px; }
-/* ---- App shell: slim title bar over three columns (UpSet · map · memberships / barcode) ---------------- */
+/* ---- App shell: slim title bar over the UpSet panel ---------------- */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .app { height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .titlebar { display: flex; align-items: center; justify-content: flex-start; flex-wrap: nowrap; gap: 8px; padding: 4px 8px;
@@ -105,11 +107,9 @@ select { font-family: "Poppins", system-ui, sans-serif; font-size: 12px; padding
 .theme-btn { margin-left: auto; padding: 4px 7px; }
 .theme-btn:disabled { cursor: not-allowed; opacity: .5; }
 
-.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px; min-height: 0; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 8px; min-height: 0; }
 .col { min-height: 0; overflow: auto; }
 .col-upset { padding: 10px 12px; }
-.col-map { padding: 0; }
-.col-viz { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
 .col-upset .panel-title { display: flex; align-items: center; gap: 6px; }
 
 .info { position: relative; display: inline-flex; }
@@ -119,13 +119,11 @@ select { font-family: "Poppins", system-ui, sans-serif; font-size: 12px; padding
   background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; box-shadow: 0 6px 24px rgba(22, 25, 29, .12);
   padding: 10px 12px; margin: 0; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-2); line-height: 1.55; }
 
-/* Narrow screens: one column after the other, the page scrolls. */
+/* Narrow screens: the page scrolls; the plot scrolls sideways inside its panel. */
 @media (max-width: 900px) {
   .app { height: auto; min-height: 100vh; }
-  .cols { grid-template-columns: minmax(0, 1fr); padding: 8px 16px 16px; }
+  .cols { padding: 8px 16px 16px; }
   .col { overflow: visible; }
-  .col-upset { overflow-x: auto; }
-  .col-viz { min-height: 160px; }
 }
 /* the empty logo slot is outlined only while developing */
 .dev .logo-slot { outline: 1px dashed rgba(255, 255, 255, .4); }

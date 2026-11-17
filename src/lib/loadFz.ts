@@ -72,6 +72,8 @@ export function buildDataset(id: string, meta: FzMeta, membership: ArrayBuffer, 
     id,
     title: meta.title,
     N,
+    // a missing identifier stays "" and is rejected by the validation (lib/fuzzyDecomposition.ts)
+    ids: Array.from({ length: N }, (_, i) => (meta.obs_ids?.[i] == null ? "" : String(meta.obs_ids[i]))),
     sets: { title: meta.sets.title, names: meta.sets.names, colors: colors(meta.sets.names), kind: meta.sets.kind, P, top: strongestSet(P, L) },
     categories: Object.entries(meta.categories ?? {}).map(([key, c]) => ({ key, title: c.title ?? key, names: c.names, codes: c.codes, colors: colors(c.names) })),
     numeric: meta.numeric_attributes ?? [],

@@ -1,20 +1,22 @@
-import { useEffect, useState } from "react";
-import { DatasetContext, type Dataset } from "../lib/dataset";
+import { useEffect, useMemo, useState } from "react";
+import { type Dataset } from "../lib/dataset";
+import { validateMemberships } from "../lib/fuzzyDecomposition";
 import { loadFz } from "../lib/loadFz";
+import FuzzyUpset from "./FuzzyUpset";
 import InfoPopover from "./InfoPopover";
 import TitleBar, { type DatasetOption } from "./TitleBar";
-import Upset from "./Upset";
 
-/** The bundled datasets: public/data/<key>/ in the fz-1 format (scripts/export_*.py). */
+/** The bundled datasets: public/data/<key>/ in the fz-1 format (scripts/export_*.py, scripts/export_fixture.mjs). */
 const DATASETS: DatasetOption[] = [
   { key: "movielens", label: "MovieLens genres (graded)" },
   { key: "movies", label: "UpSet movies (crisp)" },
   { key: "iris", label: "Iris species, kNN (graded)" },
   { key: "integration", label: "Integration cell types, kNN (graded)" },
   { key: "deconv_sim", label: "Spatial deconvolution, simulated (graded)" },
+  { key: "fixture", label: "Correctness fixture (4 elements)" },
 ];
 
-/** Picks the dataset (?dataset=<key> or the first), loads it and hands it to the explorer. */
+/** Picks the dataset (?dataset=<key> or the first), loads it and hands it to the plot. */
 export default function App() {
   const [which, setWhich] = useState(() => {
     const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("dataset") : null;
@@ -37,17 +39,14 @@ export default function App() {
     window.history.replaceState(null, "", url);
   }, [which]);
 
-  const bar = <TitleBar datasets={DATASETS} which={which} onWhich={setWhich} current={ds} />;
   return (
     <div className={`app${import.meta.env.DEV ? " dev" : ""}`}>
-      {bar}
-      {ds ? (
-        <Explorer key={ds.id} ds={ds} />
-      ) : (
-        <main className="cols">
-          <section className="col col-upset">{error && <p className="panel-note">Could not load the data: {error}</p>}</section>
-        </main>
-      )}
+      <TitleBar datasets={DATASETS} which={which} onWhich={setWhich} current={ds} />
+      <main className="cols">
+        {ds ? <Explorer key={ds.id} ds={ds} /> : (
+          <section className="col col-upset panel">{error && <p className="panel-note">Could not load the data: {error}</p>}</section>
+        )}
+      </main>
       {!ds && !error && (
         <div className="loading" role="status" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
@@ -59,41 +58,43 @@ export default function App() {
 }
 
 function Explorer({ ds }: { ds: Dataset }) {
-  const [mapEl, setMapEl] = useState<HTMLElement | null>(null);
-  const [vizEl, setVizEl] = useState<HTMLElement | null>(null);
+  // validation before any calculation: invalid elements are excluded, never set to 0
+  const { data, issues } = useMemo(() => validateMemberships(ds.ids, ds.sets.P, ds.sets.names.length, { float32: true }), [ds]);
   return (
-    <DatasetContext.Provider value={ds}>
-      <main className="cols">
-        <section className="col col-upset panel" id="upset">
-          <p className="panel-title">
-            Fuzzy UpSet
-            <InfoPopover label="About this view">
-              <strong>What it shows.</strong> Which combinations of {ds.sets.title} the {ds.obsWord} belong to, and how
-              strongly. Every {ds.obsWord.replace(/s$/, "")} has a membership from 0 to 1 in each of the {ds.sets.title}; it
-              belongs to every one whose membership reaches τ, and its strength is the lowest of those memberships. It is
-              <em> near</em> (almost belongs to) a set when its membership is from the near level (τ/2 by default) up to τ.
-              Each column is one combination: the solid bar is its fuzzy size (sum of strengths), the outline its number
-              of {ds.obsWord}. Below: the dot matrix, with a grey ring where enough of the column is near that
-              set (▸ under a bar splits the column by what its {ds.obsWord} are near, those near 3 or more sets pooled as
-              "mixed"), the composition by other variables and numerical attributes. Clicking a column highlights
-              its {ds.obsWord} on the map (Esc or "Clear selection" to undo).
-              {ds.sets.kind === "crisp" && (
-                <>
-                  <br /><br />
-                  <strong>Crisp sets</strong>: memberships are 0 or 1 (the limiting case of a fuzzy set), so τ has no
-                  effect and every strength is 1.
-                </>
-              )}
-            </InfoPopover>
-          </p>
-          <Upset mapEl={mapEl} vizEl={vizEl} />
-          <p className="panel-note data-note">
-            {ds.N} {ds.obsWord}. {ds.notes} <span className="data-src">Data: {ds.attribution}</span>
-          </p>
-        </section>
-        <section className="col col-map" ref={setMapEl} aria-label="Map" />
-        <section className="col col-viz" ref={setVizEl} aria-label="Memberships and τ barcode" />
-      </main>
-    </DatasetContext.Provider>
+    <section className="col col-upset panel" id="upset">
+      <p className="panel-title">
+        Fuzzy UpSet
+        <InfoPopover label="About this view">
+          <strong>Rows</strong> are all combinations of the selected {ds.sets.title}; black circles joined by a line mark
+          the sets of a row (they only identify it). Every {ds.obsWord.replace(/s$/, "")} has a membership from 0 to 1 in
+          each set.
+          <br /><br />
+          <strong>Inclusive intersections</strong>: an element counts in a row with the smallest of its memberships in the
+          row's sets (other sets unrestricted), so it can count in many rows.{" "}
+          <strong>Additive contributions</strong>: it counts with how far that smallest membership exceeds its largest
+          membership in the other selected sets. These parts add up: summed over every row containing a combination they
+          give its inclusive value, and summed over all rows they give the element's largest membership.
+          <br /><br />
+          <strong>Bars</strong>: outline = contributors (elements with a value above 0 in the row), solid = membership mass
+          (the sum of their values), on one axis. <strong>Histograms</strong>: the contributors' original memberships in
+          that set, 0 (left) to 1 (right), one count scale for all. <strong>Reference element</strong>: a dashed line at its
+          minimum over the row's sets; in additive mode the shaded band is its contribution.
+          <br /><br />
+          <strong>Threshold</strong>: memberships below τ count as 0. A grey ring marks a set outside the row that enough
+          contributors nearly reach (from β·τ up to τ); its hole shrinks as their mean approaches τ.
+          {ds.sets.kind === "crisp" && (
+            <><br /><br /><strong>Crisp sets</strong>: memberships are 0 or 1, so the threshold has no effect.</>
+          )}
+        </InfoPopover>
+      </p>
+      {data.N === 0 ? (
+        <p className="fu-excl fu-error">No valid {ds.obsWord}: {issues.length} problems ({issues.slice(0, 3).map((s) => `${s.id}: ${s.detail}`).join("; ")}).</p>
+      ) : (
+        <FuzzyUpset ds={ds} data={data} issues={issues} />
+      )}
+      <p className="panel-note data-note">
+        {data.N} {ds.obsWord}. {ds.notes} <span className="data-src">Data: {ds.attribution}</span>
+      </p>
+    </section>
   );
 }

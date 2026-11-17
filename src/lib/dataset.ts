@@ -1,6 +1,5 @@
-// A dataset = observations, their membership in a family of (fuzzy) sets, optional crisp categories and numerical
-// attributes, and one 2D map of the observations. Built from the fz-1 files by lib/loadFz.ts; every view reads only
-// this.
+// A dataset = observations, their membership in a family of (fuzzy) sets, and optional metadata (crisp categories,
+// numerical attributes; shown in tooltips). Built from the fz-1 files by lib/loadFz.ts.
 
 import { createContext, useContext } from "react";
 
@@ -19,7 +18,7 @@ export type SetFamily = {
   top: Int32Array;
 };
 
-/** One crisp label per observation (e.g. decade): composition rows and map colour. */
+/** One crisp label per observation (e.g. decade). */
 export type Category = {
   key: string;
   title: string;
@@ -28,7 +27,7 @@ export type Category = {
   colors: string[];
 };
 
-/** A per-observation number (e.g. a movie's mean rating), summarised per UpSet column. */
+/** A per-observation number (e.g. a movie's mean rating). */
 export type NumericAttr = {
   key: string;
   title: string;
@@ -45,6 +44,8 @@ export type Dataset = {
   id: string;
   title: string;
   N: number;
+  /** Stable unique identifier per observation (fz-1 obs_ids). */
+  ids: string[];
   sets: SetFamily;
   categories: Category[];
   numeric: NumericAttr[];
