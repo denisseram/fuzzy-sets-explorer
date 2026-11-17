@@ -1,0 +1,34 @@
+{
+ "schema": "fz-1.0.0",
+ "title": "Correctness fixture",
+ "source": "Hand-made fixture with known inclusive and additive values (see docs/guide.md, section 8).",
+ "attribution": "hand-made",
+ "notes": "Four elements in three sets; every value in the plot can be checked by hand.",
+ "n": 4,
+ "obs_ids": [
+  "E1",
+  "E2",
+  "E3",
+  "E4"
+ ],
+ "obs_names": [
+  "E1",
+  "E2",
+  "E3",
+  "E4"
+ ],
+ "obs_word": "elements",
+ "sets": {
+  "title": "sets",
+  "names": [
+   "A",
+   "B",
+   "C"
+  ],
+  "kind": "graded",
+  "file": "membership.bin"
+ },
+ "categories": {},
+ "numeric_attributes": [],
+ "map": null
+}
