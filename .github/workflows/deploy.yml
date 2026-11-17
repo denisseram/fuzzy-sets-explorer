@@ -1,8 +1,9 @@
 name: Deploy to GitHub Pages
 
+# The live site serves the fuzzy-decomposition version; the old explorer stays on main.
 on:
   push:
-    branches: [main]
+    branches: [feature/fuzzy-membership-decomposition]
   workflow_dispatch:
 
 permissions:
