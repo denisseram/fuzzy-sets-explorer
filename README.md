@@ -1,34 +1,46 @@
 # Fuzzy Sets Explorer
 
+One UpSet plot for fuzzy sets. Rows are all combinations of up to 6 selected sets; membership distributions are drawn
+inside the combination matrix. Live: https://denisseram.github.io/fuzzy-sets-explorer/
+
 ## The model
 
-Each observation $x$ (a movie) has a membership $\mu_l(x) \in [0,1]$ in each set $A_l$ (a genre). Memberships are
-independent: they need not sum to 1.
+Each element $x$ has a membership $m(x, i) \in [0, 1]$ in each set $i$. Memberships are independent (no normalisation).
+$K$ = the selected sets. At membership level $\alpha \in (0, 1]$, $x$ belongs crisply to $\{ i \in K : m(x, i) \ge \alpha \}$.
+Both modes are the crisp UpSet integrated over $\alpha$.
 
-**Threshold.** For a threshold $\tau$, an observation belongs to every set its membership reaches (the $\alpha$-cut):
+**Inclusive intersections** (default). Sets outside $T$ are unrestricted:
 
-$$A_l^\tau = \{\, x : \mu_l(x) \ge \tau \,\}, \qquad \sigma(x) = \{\, l : \mu_l(x) \ge \tau \,\}$$
+$$\mathrm{inc}(x, T) = \min_{i \in T} m(x, i), \qquad \mathrm{incMass}(T) = \sum_x \mathrm{inc}(x, T)$$
 
-**Columns.** Each combination of sets $S$ is one column, holding the observations whose sets are exactly $S$:
+**Additive contributions.** The length of the $\alpha$ range in which $x$'s crisp pattern is exactly $S$:
 
-$$R_S = \{\, x : \sigma(x) = S \,\}$$
+$$c(x, S) = \max\Big(0,\ \min_{i \in S} m(x, i) - \max_{j \in K \setminus S} m(x, j)\Big) \quad (\max \emptyset = 0)$$
 
-Every observation is in exactly one column, or in no set at all.
+Identities, per element and per mass:
 
-**Strength.** How firmly $x$ belongs to all the sets of its column (the standard fuzzy intersection):
+$$\mathrm{inc}(x, T) = \sum_{S \supseteq T} c(x, S), \qquad \sum_S c(x, S) = \max_{i \in K} m(x, i)$$
 
-$$s(x) = \min_{l \in S} \mu_l(x)$$
+**Contributors** of a row: elements with a value $> 0$ in it. Bars: outline = contributors, solid = membership mass,
+on one axis (mass ≤ contributors).
 
-**Column bars.**
+**Threshold mode** (optional): $m'(x, i) = m(x, i)$ if $m(x, i) \ge \tau$, else $0$; everything above uses $m'$.
+A **ring** marks a set outside a row when at least a share (20 % by default) of the row's contributors have
+$\beta\tau \le m < \tau$ in it.
 
-$$n_S = |R_S| \quad \text{(outline)} \qquad F_S = \sum_{x \in R_S} s(x) \quad \text{(solid)}, \qquad \tau\, n_S \le F_S \le n_S$$
+**Histograms** show the contributors' original memberships in each set of the row, in five bins of width 0.2.
 
-**Set bars.**
+See [docs/guide.md](docs/guide.md) for the full definitions and the correctness fixture.
 
-$$n_l = |A_l^\tau| \quad \text{(outline)} \qquad F_l = \sum_{x \in A_l^\tau} \mu_l(x) \quad \text{(solid)}$$
+## Run locally
 
-**Near a set.** An observation is near a set it almost reaches ($\beta = \tfrac12$ by default):
+```sh
+npm ci
+npm run dev          # http://localhost:4321/?dataset=fixture
+npm test             # Vitest
+npm run build
+npx astro check
+```
 
-$$\beta\tau \le \mu_l(x) < \tau$$
-
-See [docs/guide.md](docs/guide.md) for the full definitions.
+Calculations: [src/lib/fuzzyDecomposition.ts](src/lib/fuzzyDecomposition.ts) (pure, tested in
+[src/lib/fuzzyDecomposition.test.ts](src/lib/fuzzyDecomposition.test.ts)).

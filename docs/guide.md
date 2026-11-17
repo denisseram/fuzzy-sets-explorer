@@ -1,259 +1,199 @@
-# Fuzzy Sets Explorer: a guide to every view, parameter and encoding
+# Fuzzy Sets Explorer: a guide to the plot, its parameters and encodings
 
-This guide explains what the page shows, how every number is computed and how to read every mark. You can read
-it without the code. The definitions live in `src/lib/fuzzyUpset.ts` and `src/lib/fuzzyViews.ts`.
+The page shows one UpSet plot for fuzzy sets. Every number comes from `src/lib/fuzzyDecomposition.ts`.
 
 ## 1. Concepts
 
-An **observation** is one data point (a movie). A **set** is one of the dataset's categories (a genre). Every
-observation *i* has a **membership** `P[i, l]` in every set *l*, between 0 and 1:
+An **element** *x* (a movie, a cell) has a **membership** `m(x, i)` between 0 and 1 in every **set** *i* (a genre, a
+cell type). Memberships are independent: they need not sum to 1 and are never normalised.
 
 - **graded** sets: memberships anywhere in 0–1 (MovieLens: the Tag Genome relevance of the genre's tag);
-- **crisp** sets: memberships 0 or 1 only, the limiting case of a fuzzy set (the UpSet movies' listed genres).
-  τ then changes nothing and every strength is 1.
+- **crisp** sets: memberships 0 or 1 only (UpSet movies). The threshold then has no effect and is disabled.
 
-With a threshold **τ** (default 0.5, slider 0.05–0.95):
+*K* is the set of currently **selected sets** (at most 6). All calculations are relative to *K*.
 
-- **Combination (column)** of an observation: the sets whose membership reaches τ, `A(i) = { l : P[i, l] ≥ τ }`.
-  An observation is in exactly one column: a movie with Comedy and Romance ≥ τ is in "Comedy & Romance", **not**
-  in "Comedy". If no set reaches τ, it is in **no column** ("in no set at τ").
-- **Strength** `s(i)`: the smallest membership among the sets of its column, i.e. how firmly it belongs to *all*
-  of them.
-- **Fuzzy size** of a column: the sum of its observations' strengths. It is never more than the number of
-  observations; a column of 10 movies each with strength 0.5 has fuzzy size 5.
-- **Near** a set: a membership from the **near level** (τ/2 by default; ⅓ τ or ¾ τ in Display options) up to τ,
-  i.e. the observation *almost* belongs to it, such as the "little bit of Romance" of a movie in the Comedy column.
-  Memberships below the near level count as **out**. Every membership is thus **in**, **near** or **out**.
-- **Pure / borderline**: an observation is *pure* when it is near no set outside its column, *borderline* otherwise.
-  A borderline observation near 3 or more other sets is **mixed** ("a bit of everything").
+**Membership levels.** At a level α in (0, 1], *x* belongs crisply to `{ i ∈ K : m(x, i) ≥ α }`. Both modes below are
+the crisp UpSet plot integrated over all α. α is the explanation only; it is not a control.
 
-Example (MovieLens, τ = 0.5): 1,465 of 1,500 movies have at least one genre, giving 186 columns.
+### Inclusive intersections (default)
 
-## 2. Layout
+For a combination *T*, sets outside *T* are unrestricted:
 
-A navy title bar holds the dataset button, whose popover lists the datasets and the source of the current one.
-Below it are three columns:
+    inclusiveMembership(x, T) = min over i ∈ T of m(x, i)
+    inclusiveMass(T)          = Σₓ inclusiveMembership(x, T)
+    inclusiveCount(T)         = number of distinct x with inclusiveMembership(x, T) > 0
 
-1. **Fuzzy UpSet** (left), with its controls, the chart, the composition tray, the legend and the dataset's notes
-   and attribution.
-2. **Map** (middle).
-3. **Membership | Barcode** (right), with tabs and **⤢ Enlarge**, which opens the view large over the page.
+`inclusiveMembership(x, T)` is the length of the α range in which *x* is in every set of *T*. An element contributes
+to many rows. Inclusive values do not depend on *K*.
 
-## 3. The fuzzy UpSet
+### Additive contributions
 
-### Controls
+For a combination *S*:
 
-- **Sets**: the set family, how many sets it has, and whether they are graded or crisp.
-- **Threshold τ**: disabled for crisp sets.
-- **⇄ Flip**: turns the chart so each combination is a row, with the sets across the top (names slanted at 45°), the
-  bars growing sideways and the attributes as columns on the right. Press it again to go back.
-- **Display options** (popover; a dot marks settings that differ from the defaults):
-  - **Sort by**: fuzzy size (default) or number of observations;
-  - **Draw individually**: the largest columns (in the sort order) are drawn one by one until they hold 60 %, 80 %
-    (default), 90 % or all of the observations in some set; the others are summarised (see *Summaries* below);
-  - **Min observations to draw a column**: smaller columns go to the summaries instead (default 2);
-  - **Attributes**: median (default) or mean;
-  - **Near a set from**: ⅓ τ, ½ τ (default) or ¾ τ;
-  - **Mark near sets from**: 10 %, 20 % (default) or 33 % of a column near a set, or none;
-  - **single-set columns**: on by default; switch it off to keep only combinations.
+    insideMinimum   = min over i ∈ S of m(x, i)
+    outsideMaximum  = max over j ∈ K \ S of m(x, j)   (0 when S = K)
+    component(x, S) = max(0, insideMinimum − outsideMaximum)
+    componentMass(S)  = Σₓ component(x, S)
+    componentCount(S) = number of distinct x with component(x, S) > 0
 
-At most 50 columns are drawn individually; the summary line says "showing x of y columns (z % of the observations
-in them) + r in k summaries" and how many observations are in no set. Drawn columns and summaries together hold every
-observation in some set (except single-set columns, when they are switched off).
+`component(x, S)` is the length of the α range in which *x*'s crisp pattern is **exactly** *S*: membership above the
+element's memberships in the other selected sets. Components depend on *K*.
 
-### The chart, top to bottom
+Components are not disjoint groups of elements. Per element, the nonzero components form a nested chain of at most
+|K| combinations (sort the memberships; each step down adds the next set). So one element contributes to up to |K|
+rows, and additive counts do not sum to the number of elements.
 
-**Bars.** The solid bar is the column's **fuzzy size**. The outline bar behind it is its **number of
-observations**. Both share one axis, so the gap shows how weakly the observations belong. The tooltip also gives how
-many are pure and how many borderline. With a selection, a thin red bar inside shows how many selected observations
-the column holds.
+**Identities** (tested for every element and every mass):
 
-**Set bars.** Left of each set's name, two bars use the same encoding for the set as a whole. The **outline** is how
-many observations reach τ in the set, in *any* column that holds it (so "Comedy" here counts Comedy-only and Comedy &
-Romance movies alike, unlike the Comedy column). The **solid** bar is the sum of those observations' memberships in
-the set, never less than τ times their number. The set bars have their own scale (the largest set fills the
-strip). Hover for exact values and the mean membership. Flipped, they stand above the set names.
+    inclusiveMembership(x, T) = Σ over S ⊇ T of component(x, S)
+    inclusiveMass(T)          = Σ over S ⊇ T of componentMass(S)
+    Σ over all S of component(x, S) = max over i ∈ K of m(x, i)
 
-**Sub-columns.** A column with borderline observations has a **▸** under its bar; click it to
-split the column into sub-columns, drawn right after it on a tinted background: the pure observations, then one
-sub-column per set (or pair of sets) they are near, largest first, then **mixed** (near 3 or more other sets, marked
-◇) and **other** (patterns of a single observation, marked …). The sub-columns add up to the column. One column is
-split at a time; **▾** folds it. A sub-column can be clicked and selected like a column.
+So the additive masses sum to the sigma-count of the fuzzy union of *K*. With 0/1 memberships, inclusive mode gives
+the crisp inclusive intersections and additive mode the crisp exclusive ("distinct") intersections.
 
-**Summaries.** After a gap and a thin divider come the **summary columns**: the columns not drawn individually,
-pooled by their number of sets (1-set, 2-set, 3-set and 4+-set combinations, on a grey background). Their bars are the
-pooled fuzzy size and number of observations. The axis fits the individual columns, so a taller summary bar is cut
-by two white slashes, with its number printed on top. In the dot matrix, each set is a **partially filled disc**: it
-fills from the bottom with the share of the summary's observations whose column contains the set (half full = half
-of them). There is no joining line and no near rings. Composition and attributes are drawn as for any column. A
-summary can be clicked and selected; **▸** under its bar lists its columns (the 30 largest) right after it, each
-selectable like a column; **▾** folds them. The tooltip lists its three largest columns.
+A component is **not** `min(min over S, 1 − max over K \ S)` (a t-norm with the complement): that does not reconstruct
+the inclusive values.
 
-**Dot matrix.** There is one row per set, with its colour swatch. Every slot is a disc of the same size. A black
-disc means the set is in the column; the discs of a column are joined by a line. Grey discs are sets outside the
-column. A darker grey **ring** replaces the grey disc when at least 20 % (Display options: 10 %, 33 %) of
-the column's observations are near that set; a single observation near a set therefore draws nothing in a large
-column. Every ring has the same size as the other discs; only its white hole changes. The hole shows the column's mean
-membership in that set on a scale from 0 to τ: the lower the mean, the larger the hole (a thin ring), and as the mean
-approaches τ the hole shrinks to a small dot (an almost solid ring). The line joining a column's sets passes over the plain grey discs and behind the rings.
-The tooltip gives the count ("6 of 30 near Horror") and the column's mean
-membership.
+### Threshold mode
 
-**Composition** (one row per category, "by decade"). This is a stacked bar of the share of the column's
-observations in each category. Hue is reserved for the sets, so each composition row uses tints of one colour
-family (navy, green, amber-brown, slate grey), each category with its own texture; categories past the 8th are
-grey. Add rows from the **composition tray** under the chart (click, or drag onto the tray or the chart; up to 4
-rows). Drag chips to reorder them; ✕ removes one.
+Off by default. Memberships below τ are replaced by 0, the others kept:
 
-**Numerical attributes** (heatmap). There is one row per attribute and one cell per column, holding the column's
-median (or mean). The number is printed in short form (`3.6`, `50`, `.95`, `9.7k`, `'97`). The colour uses the
-attribute's own scale, from the 5th to the 95th percentile of all observations and clamped outside, in reversed
-viridis (light = low, dark = high). Log attributes (such as the number of ratings) use the median of log10
-values.
+    m'(x, i) = m(x, i) if m(x, i) ≥ τ, else 0
 
-**Density rows.** An attribute the dataset marks as a density (UpSet movies: release year) gets a taller row with one
-solid density plot per column instead of a heatmap cell: the value runs up the row, from the lowest to the highest
-value of all observations (flipped, from left to right). It is a Gaussian kernel density (bandwidth 1/20 of the full
-range) scaled to the column's own peak, so columns compare by shape, not size; the bars above give the size. Hover for
-the column's median and middle half.
+Everything above (contributors, masses, counts, identities) then uses *m'*. A membership equal to τ reaches it
+(compared with a tolerance of 1e-12, because the slider gives values such as 0.15000000000000002).
 
-### Interaction
+## 2. Data and validation
 
-- **Click a column** (or sub-column) to select its observations and highlight them on the map; click again to
-  clear. A selected column follows τ: its observations are the ones in that column at the current τ.
-- **Hover** anything for exact values. Column tooltips list the mean membership in each of the column's sets, the
-  top categories of each composition row and three typical observations (the highest strength).
-- **Esc** or **✕ Clear selection** removes the selection. Esc first closes the Display options or the large view.
+Datasets use the fz-1 format (`scripts/fz.py`, `src/lib/loadFz.ts`): `meta.json` plus `membership.bin` (float32, N × L).
+Each element has a stable unique identifier (`obs_ids`); categories and numerical attributes are optional metadata,
+shown in the reference element's tooltip.
 
-## 4. The map
+On load, before any calculation, a missing, non-numeric, NaN or out-of-range membership, and an identifier used more
+than once, are errors. The element is excluded, never set to 0 (with a duplicated identifier, every element using it
+is excluded). One note above the plot says how many were excluded; its tooltip lists the details. If no valid element
+remains, the error is shown instead of the plot.
 
-The map is one 2D layout of the observations. The dataset ships it (MovieLens: PCA of the z-scored Tag Genome
-vectors; UpSet movies: PCA of the z-scored genres, year, rating and log watches). A dataset without a map gets the
-PCA of its memberships. The map only shows *where* observations lie; it plays no part in the sets.
+float32 values are read as the shortest decimal that rounds to the same float32 (stored 0.7 = 0.699999988… → 0.7), so
+a stored 0.7 reaches τ = 0.7.
 
-- **Colour by** the observation's strongest set, or by any category; a legend lists the colours.
-- With a selection, the selected points are drawn on top with an ink outline, and the others fade but keep their
-  colour.
-- **Drag** a rectangle to select the points inside it; **Shift**-drag adds to the selection. The UpSet then shows
-  how the selection spreads over its columns, and the columns and sets without any selected observations fade.
-- **Click** a point to mark it: its column gets a navy triangle in the UpSet, and the summary line names it.
+## 3. Layout
 
-## 5. Membership (right panel)
+A navy title bar holds the dataset button (datasets and their sources). Below it, one panel:
 
-This view is inspired by the admixture (STRUCTURE) plots of population genetics. There is one row per column, in
-the UpSet's order. Columns not in the UpSet view are pooled into "other columns", and observations in no set get
-their own row.
+**Controls**
 
-- **Summary bar**: the column's mean memberships, normalised to sum 1, in the set colours with the most common
-  set first. The **grey bar** on the right is the share of membership outside the column's sets.
-- **Click the name** to expand the column into one thin bar per observation, sorted from the most mixed to the
-  purest. Hover a bar for the observation's memberships; click it to mark the observation.
+- **Mode**: Inclusive intersections | Additive contributions. Switching updates the same chart.
+- **Reference element**: a searchable field (type to filter); it offers the contributors of the selected row.
+- **Threshold**: turns threshold mode on and opens the sidebar. Disabled for crisp data.
+- **Sets**: one chip per set; at most 6, at least 1. Default: the 4 sets with the largest sigma-count (sum of
+  memberships), in dataset order.
 
-## 6. τ barcode (right panel)
+**The plot** (transposed UpSet)
 
-This view follows persistence barcodes in topological data analysis and α-cuts of fuzzy sets. The x axis is τ (19
-values from 0.05 to 0.95), with one **row per combination**, longest-lived first (40 shown, 80 in the large view).
-A **band** is drawn wherever the combination exists at that τ, and its **thickness** is ∝ the number of
-observations with exactly that combination.
+- One **row** per nonempty combination of the selected sets (2^|K| − 1, also those with value 0). Order: number of
+  sets ascending, then lexicographic by column order. The order never changes with the mode or τ.
+- One **column** per selected set, named at the top, with the 0–1 axis of its histograms under the name (and τ, in
+  threshold mode).
+- **Circles** (one size) joined by a **connector** mark the sets of a row. They only identify the combination and
+  never encode membership. Sets outside the row are light empty dots.
+- **Summary bars** left of the matrix, on one shared axis "elements", growing leftward: the outline is the number of
+  **contributors**, the solid bar the **membership mass** in the active mode. Mass ≤ contributors, since each
+  contributor adds at most 1; their ratio is the mean contribution. The axis is fixed across modes (the inclusive
+  maximum), so bars can be compared when switching.
+- **Histograms**: in each cell of a set in the row, right of the circle.
 
-- A long, even band means the combination exists for any reasonable τ. A short band means it depends on τ.
-- Crisp sets do not depend on τ, so every band runs the full width.
-- A navy line marks the current τ. **Click the track** to set τ; **click a name** to select that column. A marked
-  observation leaves a trail of navy dots (its combination at each τ).
+The panel ends with the dataset's size, notes and attribution. **ⓘ** next to the title summarises this guide.
 
-## 7. Colours
+## 4. Membership histograms
 
-- **Sets** take a categorical palette in fixed order: #4A57B0, #E0A030, #2F8A68, #C0603A, #7FB0F0, #E08DAE,
-  #823953, #A264B0; past the 8th, grey #9A9A9A.
-- **Navy** (#282C5F) is the interface accent: bars, the selected tab, focus, and the marked observation.
-- **Red** (#E4002B) marks the linked selection, unlike every data colour.
-- **Composition** uses tints and textures of one family per row, and **attributes** use reversed viridis.
+In each cell of a set *i* in row *T*, a histogram of the row's **contributors'** **original** memberships in *i*
+(not minima, not components, not thresholded values):
 
-## 8. Caveats
+- **Population**, the same for every set of the row: inclusive mode, elements with `inclusiveMembership(x, T) > 0`;
+  additive mode, elements with `component(x, T) > 0`; in threshold mode decided with *m'*.
+- **X**: membership, 0 at the left edge, 1 at the right edge; 72 px for every histogram.
+- **Bins**: [0, 0.2), [0.2, 0.4), [0.4, 0.6), [0.6, 0.8), [0.8, 1.0], by explicit edges (not floor(v / 0.2), which
+  puts 0.6 in the wrong bin and 1.0 in a sixth). Binning is display only.
+- **Y**: number of elements per bin, bars growing up from the row's baseline, plus a monotone curve through the bin
+  centres (no overshoot) with a light fill. One count scale for every histogram on screen (mode, sets and τ fixed).
+- No contributors: only the baseline.
+- Each histogram sits on an opaque background drawn over the connector, so the connector visibly runs from circle to
+  circle and is interrupted by the distributions. Histogram axes are thin and light grey.
+- Threshold mode: a short tick marks τ on the axis and [0, τ) is shaded very lightly.
 
-- **τ is a choice.** Columns appear and disappear with τ; the barcode shows how much.
-- **Genome genres are not curated genres.** The Tag Genome scores how strongly users associate a tag with a
-  movie (Star Wars scores War 0.88).
-- **Small columns.** Columns with few observations give noisy attribute values; check the count in the tooltip.
-- **The map is one projection.** Distances on a 2D map are approximate; use it to locate a selection, not to
-  measure it.
+## 5. Threshold sidebar and rings
 
-## 9. The mathematics
+The sidebar (only in threshold mode) holds:
 
-This section states, in standard fuzzy-set terms, what the app computes. Notation: *X* is the set of observations,
-*A₁ … A_L* the fuzzy sets with membership functions μₗ : X → [0, 1]. The memberships are independent: nothing
-requires Σₗ μₗ(x) = 1. (The MovieLens sums range from about 1.4 to 8.3.)
+- **Threshold τ**: 0.05–0.95, step 0.05, default 0.5.
+- **Ring level β**: ⅓, ½ (default), ¾. Memberships from β·τ up to τ count as "below τ but near".
+- **Ring share**: 10 %, 20 % (default), 33 % of a row's contributors.
 
-**α-cuts.** For the threshold τ, the (weak) α-cut of a set is the crisp set
+**Rings.** In a row, a set outside the combination gets a ring instead of the light dot when at least the ring share
+of the row's contributors have β·τ ≤ m < τ in it (original values). The ring is a grey disc with a white hole that
+shrinks as the mean of those memberships approaches τ. Next to it, a mini histogram of those memberships in the
+lighter ring colour, on the same axis and count scale. Rings never enter masses, counts or the reference line.
+Tooltip: "2 of 3 contributors have 0.25 ≤ C < 0.50; mean 0.41".
 
-    Aₗ^τ = { x ∈ X : μₗ(x) ≥ τ }
+## 6. Reference element
 
-and the **signature** of an observation is the list of cuts it falls into, σ_τ(x) = { l : μₗ(x) ≥ τ }.
+The reference line shows the intersection minimum of **one** element: not an aggregate, not a mean or a threshold.
 
-**Columns are exclusive intersections of α-cuts.** For a combination S of sets, the column is
+For the selected element *x* and the selected row *T*: `referenceValue = min over i ∈ T of m(x, i)` (original values,
+also in threshold mode). A dashed red vertical line at that value is drawn in the histograms of every set of *T*, and
+a label right of the matrix reads, e.g., "E1: min(A, B) = 0.70". The line's tooltip adds *x*'s membership in that set
+and its metadata.
 
-    R_S^τ = ( ⋂_{l∈S} Aₗ^τ ) ∖ ( ⋃_{l∉S} Aₗ^τ ) = { x : σ_τ(x) = S }
+In additive mode the line still shows the inclusive minimum. A red band from `outsideMaximum` to `insideMinimum` is
+shaded on the histograms: its width is exactly `component(x, T)` (with *m'* in threshold mode).
 
-a crisp, exclusive region, as in a Venn diagram. The columns partition the observations, together with those in no set
-(σ = ∅). With the standard fuzzy intersection and union, μ_{A∩B} = min(μ_A, μ_B) and μ_{A∪B} = max(μ_A, μ_B),
-α-cuts commute with both: (A ∩ B)^τ = A^τ ∩ B^τ and (A ∪ B)^τ = A^τ ∪ B^τ. Hence
+Rules: the field offers only the contributors of the selected row in the active mode (and τ). No reference by
+default. When the row, mode, sets or τ change, the element is kept if it still contributes, otherwise cleared.
 
-    R_S^τ = ( ⋂_{l∈S} Aₗ )^τ ∖ ( ⋃_{l∉S} Aₗ )^τ
+## 7. Interaction
 
-A column is the α-cut of the fuzzy intersection of its sets, minus the α-cut of the fuzzy union of all the others.
-This holds for min and max only: with the product t-norm, (A · B)^τ ≠ A^τ ∩ B^τ in general, which is why the app uses
-min.
+- No row is selected initially. Clicking a row (bars or matrix) selects it; clicking it again deselects it. The
+  selected row is tinted, its connector is thicker, and the other rows fade.
+- The selected row persists across mode and τ changes; it is cleared when one of its sets is deselected.
+- Everything is recalculated when the selected sets, the mode or τ change.
+- Tooltips: bars (contributors, mass, mean), histogram bins (range and count), circles and rings, the reference line.
 
-**Strength, count and fuzzy size (column bars).** An observation's strength is its membership in the fuzzy intersection
-of its column's sets:
+## 8. Correctness fixture
 
-    s_S(x) = min_{l∈S} μₗ(x) = μ_{⋂_{l∈S} Aₗ}(x)
+Bundled as the dataset "Correctness fixture" (`?dataset=fixture`, written by `scripts/export_fixture.mjs`) and used
+in the unit tests:
 
-The outline bar is the count n_S = |R_S^τ|. The solid bar is a **sigma-count** (the scalar cardinality Σₓ μ(x) of a
-fuzzy set), taken over the column's observations only:
+| | A | B | C |
+|---|---|---|---|
+| E1 | 0.8 | 0.7 | 0.5 |
+| E2 | 0.2 | 0.9 | 0.4 |
+| E3 | 0.0 | 0.0 | 0.0 |
+| E4 | 0.6 | 0.6 | 0.0 |
 
-    F_S = Σ_{x ∈ R_S^τ} μ_{⋂_{l∈S} Aₗ}(x),   with   τ · n_S ≤ F_S ≤ n_S
+Without threshold, component masses (contributors): A 0.1 (E1) · B 0.5 (E2) · C 0 · AB 0.8 (E1, E4) · AC 0 ·
+BC 0.2 (E2) · ABC 0.7 (E1, E2).
 
-because every strength in the column is at least τ.
+Inclusive A ∩ B: mass 1.5, contributors E1, E2, E4; histograms A [0.8, 0.2, 0.6], B [0.7, 0.9, 0.6]; with E1 as
+reference, the line is at 0.7 in both. Additive AB: mass 0.8, contributors E1, E4; E1's band runs from 0.5 to 0.7.
 
-**Set bars.** For each set, the outline is the size of its α-cut, nₗ = |Aₗ^τ|. The solid bar is the sigma-count over
-that cut, Fₗ = Σ_{x ∈ Aₗ^τ} μₗ(x), with τ · nₗ ≤ Fₗ ≤ nₗ. The cut includes every column that holds the set, so
-nₗ = Σ_{S ∋ l} n_S.
+Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 
-**Near: a band between two α-cuts.** With the near factor β (½ by default; ⅓ or ¾ in Display options),
+- Inclusive: A 1.4 (E1, E4) · B 2.2 (E1, E2, E4) · C 0.5 (E1) · AB 1.3 (E1, E4) · AC 0.5 · BC 0.5 · ABC 0.5 (E1).
+- Additive: A 0.1 (E1) · B 0.9 (E2) · C 0 · AB 0.8 (E1, E4) · AC 0 · BC 0 · ABC 0.5 (E1).
+- Rings: row B rings set C in both modes (E2: C = 0.4). E2's A = 0.2 is below β·τ = 0.25: no ring.
 
-    Nₗ = Aₗ^{βτ} ∖ Aₗ^τ = { x : βτ ≤ μₗ(x) < τ }
+## 9. Colours and sizes
 
-Every membership is thus **in** (≥ τ), **near** (in [βτ, τ)) or **out** (< βτ). This three-way split resembles
-Pedrycz's shadowed sets, which turn a fuzzy set into {0, shadow, 1}; "near" is the shadow. An observation's near
-pattern is { l ∉ σ_τ(x) : x ∈ Nₗ }, and the sub-columns group a column by it.
+- Navy (#282C5F): bars and histograms. Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
+  Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference line, band and label.
+- Row height 30 px (histogram plot 21 px tall), histogram 72 px wide, circles of radius 6.5 px.
 
-**Rings.** For a column S and a set l outside it, the dot matrix uses the share of the column in the band,
-ρ = |R_S^τ ∩ Nₗ| / n_S (a ring appears when ρ reaches the "mark near sets" level), and the column's mean membership,
-m = (1 / n_S) Σ_{x ∈ R_S^τ} μₗ(x), which sets the size of the ring's hole on 0 → τ.
+## 10. Caveats
 
-**Barcode.** It plots n_S(τ) = |R_S^τ| over a grid of τ. This follows the decomposition (resolution) theorem: a fuzzy
-set is described by the family of its α-cuts, A = ⋃_α α · A^α. The barcode shows that family for every combination.
-
-**Summaries.** A summary column of degree d pools the columns with |S| = d (or ≥ 4) that are not drawn individually:
-its count and fuzzy size are the sums of theirs. A set's partial disc shows Σ_{S ∋ l} n_S / Σ_S n_S over the pooled
-columns.
-
-**What the app does not compute.** A fully fuzzy version of a column would itself be a fuzzy set, using the fuzzy
-complement 1 − μ:
-
-    μ_{R_S}(x) = min( min_{l∈S} μₗ(x), min_{l∉S} (1 − μₗ(x)) )
-
-Each observation would then belong partly to several columns. Take an observation with Comedy 0.9 and Romance 0.49 at
-τ = 0.5:
-
-| | The app | Fully fuzzy |
-|---|---|---|
-| Comedy only | the observation, strength 0.9 | min(0.9, 1 − 0.49) = 0.51 |
-| Comedy & Romance | nothing | min(0.9, 0.49) = 0.49 |
-
-The app keeps each observation in exactly one column, so columns can be counted, selected and linked to the map. It
-records the 0.49 as **near Romance**, shown by the ring and the sub-column. The near encoding carries the information
-the complement term would have carried. Fuzzy unions, other t-norms (product, Łukasiewicz) and the fully fuzzy regions
-are not computed.
-
+- **One count scale.** A row with many contributors sets the scale for all; histograms of small rows can be almost
+  flat (MovieLens, additive mode). Hover the bins for exact counts.
+- **Many tiny memberships.** Without a threshold any membership above 0 makes an element a contributor; with Tag
+  Genome scores almost every movie contributes to every inclusive row. Threshold mode removes those.
+- **Scalability.** At most 6 sets (63 rows) in this version.
