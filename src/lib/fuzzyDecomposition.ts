@@ -488,6 +488,25 @@ export function rowDetail(d: Memberships, sets: readonly number[], contributors:
   };
 }
 
+/** Per set of a row: the contributors' original memberships, aligned with `idx` (the row's contributors, ascending). */
+export type RowValues = { idx: readonly number[]; values: Float64Array[] };
+
+/**
+ * The points and violins of one row: per set of the row (same order as `sets`), the original membership of every
+ * contributor. Separate from rowDetail so that only the rows drawn at Full detail store their values.
+ */
+export function rowValues(d: Memberships, sets: readonly number[], contributors: readonly number[]): RowValues {
+  const L = d.L;
+  return {
+    idx: contributors,
+    values: sets.map((i) => {
+      const v = new Float64Array(contributors.length);
+      for (let c = 0; c < contributors.length; c++) v[c] = d.P[contributors[c] * L + i];
+      return v;
+    }),
+  };
+}
+
 /** The sets of K outside T where at least `share` of the contributors have β·τ_j ≤ m < τ_j (original memberships). */
 export function ringsFor(d: Memberships, T: readonly number[], K: readonly number[], contributors: readonly number[], th: Threshold): Ring[] {
   if (!contributors.length) return [];

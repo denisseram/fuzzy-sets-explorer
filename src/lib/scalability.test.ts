@@ -5,8 +5,8 @@ import {
   sigmaCounts, similarityOrder, upsetRows, validateMemberships, type Combo, type Memberships, type Threshold,
 } from "./fuzzyDecomposition";
 import {
-  applyFilters, clauseMatches, describeClause, describeQuery, displayEntries, groupRows, horizon, latticeDistance, layout, lodOf,
-  neighbourhood, queryMatches, rankChanges, rowHeight, ROW_FULL, ROW_MIN, snapshotDiff, sortRows, STUB_H,
+  applyFilters, autoFullRows, clauseMatches, describeClause, describeQuery, displayEntries, FULL_MIN, groupRows, horizon, latticeDistance, layout, lodOf,
+  neighbourhood, queryMatches, rankChanges, rowHeight, ROW_FULL, ROW_MIN, snapshotDiff, sortRows, STUB_H, type Placed,
 } from "./upsetView";
 
 const A = 0, B = 1, C = 2, D = 3;
@@ -201,18 +201,39 @@ describe("queries", () => {
 });
 
 describe("level of detail", () => {
-  it("from row height: Full ≥ 28, Compact 12–27, Minimal < 12", () => {
-    expect([30, 28, 27, 12, 11, 6].map(lodOf)).toEqual(["full", "full", "compact", "compact", "minimal", "minimal"]);
+  it("from row height: Full ≥ 80, Compact 12–79, Minimal < 12", () => {
+    expect(ROW_FULL).toBe(86);
+    expect(FULL_MIN).toBe(80);
+    expect([86, 80, 79, 12, 11, 6].map(lodOf)).toEqual(["full", "full", "compact", "compact", "minimal", "minimal"]);
   });
   it("Auto: the largest height at which every row fits, at most Full, never below Minimal", () => {
-    expect(rowHeight("auto", 10, 600)).toBe(ROW_FULL);
-    expect(lodOf(rowHeight("auto", 21, 600))).toBe("full"); // 28 px
-    expect(lodOf(rowHeight("auto", 22, 600))).toBe("compact"); // 27 px
+    expect(rowHeight("auto", 6, 600)).toBe(ROW_FULL);
+    expect(lodOf(rowHeight("auto", 7, 600))).toBe("full"); // 85 px
+    expect(lodOf(rowHeight("auto", 8, 600))).toBe("compact"); // 75 px
+    expect(lodOf(rowHeight("auto", 50, 600))).toBe("compact"); // 12 px
     expect(lodOf(rowHeight("auto", 60, 600))).toBe("minimal"); // 10 px
     expect(rowHeight("auto", 1000, 600)).toBe(ROW_MIN);
     expect(lodOf(rowHeight("compact", 1, 600))).toBe("compact");
     expect(lodOf(rowHeight("minimal", 1, 600))).toBe("minimal");
     expect(lodOf(rowHeight("full", 1000, 600))).toBe("full");
+  });
+  it("Auto: the selected row and the fish-eye focus rows are Full, the others share the rest", () => {
+    const rows = combinations([A, B, C, D]).map((T) => ({ sets: T, key: T.join(","), mass: 1, contributors: [0] }));
+    const entries = displayEntries(rows, null, new Set(), null);
+    const sel = autoFullRows(entries, "0,1", null);
+    expect([...sel]).toEqual(["0,1"]);
+    const h = rowHeight("auto", rows.length, 600, sel.size); // (600 − 86) / 14 = 36 px: Compact
+    expect(h).toBe(36);
+    const out = layout(entries, { rowH: h, headerH: 18, fisheye: null, full: sel }).items as Extract<Placed, { kind: "row" }>[];
+    expect(out.filter((p) => lodOf(p.h) === "full").map((p) => p.combo.key)).toEqual(["0,1"]);
+    expect(out.filter((p) => p.combo.key !== "0,1").every((p) => lodOf(p.h) === "compact")).toBe(true);
+    expect(out.reduce((s, p) => s + p.h, 0)).toBeLessThanOrEqual(600);
+    // fish-eye focus: the focus and 3 shown rows on each side, plus the selected row
+    const fe = autoFullRows(entries, "0,1", rows[8].key);
+    expect([...fe].sort()).toEqual([...new Set(["0,1", ...rows.slice(5, 12).map((c) => c.key)])].sort());
+    // rows repeat across groups: every copy of the selected row is Full
+    const grouped = displayEntries(rows, groupRows(rows, "set", [A, B, C, D], NAMES), new Set(), null);
+    expect(autoFullRows(grouped, "0,1", null).size).toBe(2);
   });
 });
 

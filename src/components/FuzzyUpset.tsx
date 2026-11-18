@@ -2,11 +2,11 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { obsLabel, type Dataset } from "../lib/dataset";
 import {
   aggregate, CELL_BUDGET, defaultSets, emptyCombos, isCrisp, issueSummary, jaccardMatrix, MAX_SETS, MAX_SETS_EMPTY_ROWS, maxBinOf, maxNonzeroDegree,
-  maxRowCount, modeCombos, positiveHistogram, reference, ROW_BUDGET, rowDetail, sigmaCounts, similarityOrder,
-  type Combo, type Issue, type Memberships, type Mode, type RowDetail, type Threshold,
+  maxRowCount, modeCombos, positiveHistogram, reference, ROW_BUDGET, rowDetail, rowValues, sigmaCounts, similarityOrder,
+  type Combo, type Issue, type Memberships, type Mode, type RowDetail, type RowValues, type Threshold,
 } from "../lib/fuzzyDecomposition";
 import {
-  applyFilters, describeClause, describeQuery, displayEntries, groupRows, neighbourhood, queryMatches, rankChanges, sortRows,
+  applyFilters, describeClause, describeQuery, displayEntries, groupRows, neighbourhood, pickReference, queryMatches, rankChanges, referenceLabel, sortRows,
   type Clause, type Group, type GroupBy, type LodSetting, type QState, type SortBy,
 } from "../lib/upsetView";
 import { tipStyle } from "../lib/tip";
@@ -73,6 +73,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [selected, setSelected] = useState<string | null>(null);
   const [refX, setRefX] = useState<number | null>(null);
   const [refText, setRefText] = useState("");
+  const [profileAll, setProfileAll] = useState(false);
   const [hover, setHover] = useState<Hover | null>(null);
   const [showEmpty, setShowEmpty] = useState(false);
   const [degLo, setDegLo] = useState<number | null>(null);
@@ -131,6 +132,13 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
     return d;
   }, [detailCache, data, K, threshold]);
   const maxBin = useMemo(() => Math.max(1, maxBinOf(sorted.map(detail))), [sorted, detail]);
+  // the contributors' original memberships per cell: only for the rows drawn at Full detail (points and violins)
+  const valuesCache = useMemo(() => new Map<string, RowValues>(), [all]);
+  const values = useCallback((c: Combo) => {
+    let v = valuesCache.get(c.key);
+    if (!v) valuesCache.set(c.key, (v = rowValues(data, c.sets, c.contributors)));
+    return v;
+  }, [valuesCache, data]);
 
   // queries (clauses on deselected sets are ignored)
   const activeClauses = useMemo(
@@ -204,12 +212,28 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
     const who = short(obsLabel(ds, data.src[refX]), 24);
     return {
       who,
-      label: `${who}: min(${cols.filter((i) => T.includes(i)).map((i) => names[i]).join(", ")}) = ${r.value.toFixed(2)}`,
+      label: referenceLabel(who, cols.filter((i) => T.includes(i)).map((i) => names[i]), r.value),
       value: r.value,
       band: mode === "additive" ? { from: r.outside, to: r.inside, component: r.component } : null,
       membership: (i) => data.P[refX * data.L + i],
     };
   }, [selCombo, refX, contribSet, data, K, threshold, ds, cols, names, mode]);
+  const elemLabel = useCallback((x: number) => short(obsLabel(ds, data.src[x]), 24), [ds, data]);
+  const clearRef = useCallback(() => (setRefX(null), setRefText("")), []);
+  // a click on a point: that element becomes the reference (input kept in sync) and its row is selected; again: clear
+  const onPick = useCallback((key: string, x: number) => {
+    const next = pickReference({ selected, refX }, key, x);
+    setSelected(next.selected);
+    setRefX(next.refX);
+    setRefText(next.refX === null ? "" : optLabel(next.refX));
+  }, [refX, selected, optLabel]);
+  useEffect(() => {
+    if (refX === null) return;
+    // Escape clears the reference element, unless it closes an open popover
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector("[role=dialog]") && clearRef();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [refX, clearRef]);
 
   // ---- set selection: shelf chips and header drag ------------------------------------------------------------------
 
@@ -324,7 +348,10 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
               onChange={(e) => (setRefText(e.target.value), setRefX(byLabel.get(e.target.value) ?? null))}
             />
             <datalist id="fu-ref-list">{contributors.slice(0, 2000).map((x) => <option key={x} value={optLabel(x)} />)}</datalist>
-            {refText && <button className="fu-link" aria-label="Clear the reference element" onClick={() => (setRefX(null), setRefText(""))}>✕</button>}
+            {refText && <button className="fu-link" aria-label="Clear the reference element" onClick={clearRef}>✕</button>}
+            <label className="fc-check" title="Draw the reference element's profile in every visible Full row where it contributes, not only in the selected row">
+              <input type="checkbox" checked={profileAll} onChange={(e) => setProfileAll(e.target.checked)} /> Profile in all rows
+            </label>
           </div>
           <button
             className="fc-btn" aria-pressed={thActive} disabled={crisp} onClick={() => setThOn(!thOn)}
@@ -346,7 +373,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
           <label className="fc-item" title="Column order; rows sorted by degree break ties by this order"><span className="fc-lbl">Set order</span>
             <select value={setOrder} onChange={(e) => setSetOrder(e.target.value as SetOrder)}>{ORDERS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
           </label>
-          <label className="fc-item" title="Level of detail per cell: Full = histogram, Compact = grayscale strip, Minimal = circles only. Auto: the largest level at which all rows fit"><span className="fc-lbl">Rows</span>
+          <label className="fc-item" title="Level of detail per cell: Full = points and half violin, Compact = vertical grayscale strip, Minimal = circles only. Auto: the selected row (and the fish-eye focus) Full, the others at the largest level at which all rows fit"><span className="fc-lbl">Rows</span>
             <select value={lod} onChange={(e) => setLod(e.target.value as LodSetting)}>{LODS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
           </label>
           <label className="fc-item fc-check" title="When rows overflow: the hovered or selected row and 3 neighbours on each side get full height">
@@ -441,6 +468,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
           <UpsetMatrix
             names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} fisheye={fisheye}
             N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} detail={detail} groupAgg={groupAgg} query={query}
+            values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll}
             selected={selected} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}
             headHists={headHists} headMax={setHistMax} headTip={headTip} onHeaderDown={onHeaderDown} headRef={headRef}
             dropActive={!!drag?.moved && drag.kind === "add"} snapshots={snapshots} onRemoveSnapshot={onRemoveSnapshot} rank={rankView} ranking={ranking}

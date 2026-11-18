@@ -1,18 +1,32 @@
-import { area, curveMonotoneX, line, scaleLinear, select } from "d3";
+import { scaleLinear, select } from "d3";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { binLabel, N_BINS, tauOf, type Combo, type Mode, type RowDetail, type Threshold } from "../lib/fuzzyDecomposition";
+import { binLabel, BIN_EDGES, N_BINS, tauOf, type Combo, type Mode, type RowDetail, type RowValues, type Threshold } from "../lib/fuzzyDecomposition";
 import { holeRadius } from "../lib/fuzzyUpset";
 import {
-  countEntries, horizon, layout, lodOf, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
+  autoFullRows, countEntries, horizon, layout, lodOf, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
 } from "../lib/upsetView";
+import { indexOfSorted, jitter, MAX_POINTS, pointsToDraw, profilePath, VIOLIN_STEPS, violinOf } from "../lib/violin";
 import { HistBars } from "./MiniHist";
 
-/** Width of every membership histogram and compact strip (membership 0 at the left edge, 1 at the right edge). */
+/** Width of the column-header histograms (membership 0 left, 1 right) and the largest half-violin width (a count). */
 export const HIST_W = 72;
 /** Circles: one size for every set slot (smaller in short rows); a ring is the same disc in grey with a white hole. */
 const DOT_R = 6.5, HOLE_MIN = 1.5, HOLE_MAX = 5;
-/** Matrix cell: the circle at the left, then the histogram. */
-const CELL_W = 112, CIRCLE_X = 12, HIST_X = 28;
+/**
+ * Matrix cell: the points' jitter strip (JIT_W) left of the vertical membership axis at AXIS_X, the half violin right of
+ * it (up to HIST_W). The circle sits under the axis; the header histogram starts at the axis.
+ */
+const CELL_W = 116, AXIS_X = 30, JIT_W = 22, CIRCLE_X = AXIS_X, HIST_X = AXIS_X;
+/** Points: radius, and radius of the reference element's points. */
+const PT_R = 2.5, PT_R_REF = 4;
+/** Full rows: the plot area from PLOT_TOP to h − CIRCLE_STRIP (membership 1 at the top), the circles in the strip below. */
+const PLOT_TOP = 6, CIRCLE_STRIP = 24;
+/** Compact rows: a vertical strip of the 5 bins right of the circle. */
+const STRIP_X = AXIS_X + 10, STRIP_W = 16;
+const GRID = [0.2, 0.4, 0.6, 0.8];
+/** Left edge of the jitter strip and centre of an element's point in a cell (relative to the cell). */
+const JIT_X = AXIS_X - 2 - JIT_W;
+const pointDx = (x: number) => AXIS_X - 2 - PT_R - jitter(x) * (JIT_W - 2 * PT_R);
 /** Summary bars, left of the matrix, growing leftward from its edge. */
 const PAD = 22, BAR_W = 150, BAR_H = 12, GAP = 14;
 /** Header: bar key, two-axis scale, set names with their histograms. */
@@ -61,33 +75,33 @@ export function Dot({ cx, cy, r = DOT_R, member, hole = 0, may = false }: { cx: 
   );
 }
 
-/** A small histogram: bars per 0.2-wide bin plus a monotone curve through the bin centres (no overshoot). */
-function Hist({ x, base, h, counts, maxC, color, tint }: { x: number; base: number; h: number; counts: number[]; maxC: number; color: string; tint: number }) {
-  const bw = HIST_W / N_BINS;
-  const y = (c: number) => base - (maxC > 0 ? (c / maxC) * h : 0);
-  const pts = counts.map((c, b) => [x + (b + 0.5) * bw, y(c)] as [number, number]);
-  if (!counts.some((c) => c > 0)) return null;
-  return (
-    <g pointerEvents="none">
-      {counts.map((c, b) => c > 0 && <rect key={b} x={x + b * bw + 0.75} y={y(c)} width={bw - 1.5} height={base - y(c)} fill={color} fillOpacity={tint} />)}
-      <path d={area<[number, number]>().x((p) => p[0]).y0(base).y1((p) => p[1]).curve(curveMonotoneX)(pts) ?? ""} fill={color} fillOpacity={0.08} />
-      <path d={line().curve(curveMonotoneX)(pts) ?? ""} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
-    </g>
-  );
+/**
+ * A half violin right of the axis at `ax`: f (elements per 0.2 of membership, at y = 0, 0.02, …, 1) as a width on the
+ * shared scale `maxF` (HIST_W px), membership on the vertical axis `yOf`.
+ */
+function Violin({ ax, f, maxF, yOf, color }: { ax: number; f: Float64Array; maxF: number; yOf: (v: number) => number; color: string }) {
+  if (!(maxF > 0)) return null;
+  let d = `M${ax},${yOf(0).toFixed(1)}`;
+  for (let i = 0; i < VIOLIN_STEPS; i++) d += `L${(ax + (f[i] / maxF) * HIST_W).toFixed(1)},${yOf(i / (VIOLIN_STEPS - 1)).toFixed(1)}`;
+  d += `L${ax},${yOf(1).toFixed(1)}Z`;
+  return <path d={d} fill={color} fillOpacity={0.14} stroke={color} strokeWidth={1} strokeLinejoin="round" pointerEvents="none" />;
 }
 
-/** Compact level: the 5 bins as grayscale cells (darker = more elements, on the shared count scale). */
-function Strip({ x, y, h, counts, maxC, ring = false }: { x: number; y: number; h: number; counts: number[]; maxC: number; ring?: boolean }) {
-  const bw = HIST_W / N_BINS;
+/** Compact level: the 5 bins as grayscale cells stacked bottom ([0, 0.2)) to top (darker = more elements, shared count scale). */
+function VStrip({ x, y, h, counts, maxC, ring = false }: { x: number; y: number; h: number; counts: number[]; maxC: number; ring?: boolean }) {
+  const bh = h / N_BINS;
   return (
     <g pointerEvents="none">
-      <rect x={x} y={y} width={HIST_W} height={h} fill="none" stroke="var(--axis)" strokeWidth={0.6} />
+      <rect x={x} y={y} width={STRIP_W} height={h} fill="none" stroke="var(--axis)" strokeWidth={0.6} />
       {counts.map((c, b) => c > 0 && (
-        <rect key={b} x={x + b * bw} y={y} width={bw} height={h} fill={ring ? "var(--near-ring)" : "var(--ink)"} fillOpacity={(ring ? 0.5 : 1) * (0.1 + 0.85 * (c / Math.max(1, maxC)))} />
+        <rect key={b} x={x} y={y + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill={ring ? "var(--near-ring)" : "var(--ink)"} fillOpacity={(ring ? 0.5 : 1) * (0.1 + 0.85 * (c / Math.max(1, maxC)))} />
       ))}
     </g>
   );
 }
+
+/** Upper edge of display bin b. */
+const binTop = (b: number) => (b === N_BINS - 1 ? 1 : BIN_EDGES[b + 1]);
 
 /**
  * A count or mass bar on the adjustable axis, growing leftward from `right`. Beyond the range it wraps: each wrap is
@@ -165,9 +179,17 @@ export type MatrixProps = {
   R: number;
   G: number | null;
   onRange: (v: number) => void;
-  /** Shared count scale of every histogram and strip on screen. */
+  /** Shared count scale of every compact strip. */
   maxBin: number;
   detail: (c: Combo) => RowDetail;
+  /** Per set of a row: the contributors' original memberships (points and violins of Full rows). */
+  values: (c: Combo) => RowValues;
+  /** The reference element (index into the memberships), its short label for tooltips, and the click on a point. */
+  refElem: number | null;
+  elemLabel: (x: number) => string;
+  onPick: (key: string, x: number) => void;
+  /** Draw the reference element's profile in every visible Full row where it contributes. */
+  profileAll: boolean;
   groupAgg: (g: Group) => Agg;
   query: { text: string; agg: Agg; matches: ReadonlySet<string> } | null;
   selected: string | null;
@@ -200,7 +222,7 @@ export type MatrixProps = {
  * of detail.
  */
 function UpsetMatrix(p: MatrixProps) {
-  const { names, cols, mode, threshold, selected, reference, tip, maxBin, range } = p;
+  const { names, cols, mode, threshold, selected, reference, tip, range } = p;
   const k = cols.length;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState({ top: 0, h: 480 });
@@ -235,12 +257,14 @@ function UpsetMatrix(p: MatrixProps) {
   const counts = useMemo(() => countEntries(p.entries), [p.entries]);
   const avail = Math.max(120, vp.h - headTotal - 4);
   const hH0 = headerH(ROW_FULL);
-  const rowH = rowHeight(p.lod, counts.rows, avail - counts.headers * hH0 - counts.stubs * 5);
-  const hH = headerH(rowH);
   const focus = p.fisheye ? (hoverId ?? p.entries.find((e) => e.kind === "row" && e.combo.key === selected)?.id ?? null) : null;
+  // Auto: the selected row and the fish-eye focus rows are always Full; the others take the largest level that fits
+  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus) : new Set<string>()), [p.lod, p.entries, selected, focus]);
+  const rowH = rowHeight(p.lod, counts.rows, avail - counts.headers * hH0 - counts.stubs * 5, fullIds.size);
+  const hH = headerH(rowH);
   const lay = useMemo(
-    () => layout(p.entries, { rowH, headerH: hH, fisheye: p.fisheye ? { focus, avail } : null }),
-    [p.entries, rowH, hH, p.fisheye, focus, avail],
+    () => layout(p.entries, { rowH, headerH: hH, fisheye: p.fisheye ? { focus, avail } : null, full: fullIds }),
+    [p.entries, rowH, hH, p.fisheye, focus, avail, fullIds],
   );
   const pitch = rowH;
   const snapH = Math.max(0, ...p.snapshots.map((s) => s.keys.length * pitch));
@@ -259,6 +283,14 @@ function UpsetMatrix(p: MatrixProps) {
 
   const top = vp.top - OVERSCAN, bottom = vp.top + vp.h + OVERSCAN;
   const visible = lay.items.filter((it) => it.y + it.h >= top && it.y <= bottom);
+
+  // one horizontal scale for every half violin on screen: the largest f over the visible Full cells (rings included)
+  let maxF = 0;
+  for (const it of visible) {
+    if (it.kind !== "row" || lodOf(it.h) !== "full") continue;
+    for (const v of p.values(it.combo).values) maxF = Math.max(maxF, violinOf(v).max);
+    for (const g of p.detail(it.combo).rings) maxF = Math.max(maxF, violinOf(g.values).max);
+  }
 
   // the selected row out of view: an arrow at the edge
   const selItem = selected ? lay.items.find((it) => it.kind === "row" && it.combo.key === selected) : undefined;
@@ -298,7 +330,9 @@ function UpsetMatrix(p: MatrixProps) {
   );
 
   const renderRow = (it: Extract<Placed, { kind: "row" }>) => {
-    const c = it.combo, h = it.h, cy = h / 2, lod = lodOf(h), r = dotR(h);
+    const c = it.combo, h = it.h, lod = lodOf(h), r = lod === "full" ? DOT_R : dotR(h);
+    // Full rows: plot area on top, circles in a strip at the bottom; otherwise the circles are centred
+    const cy = lod === "full" ? h - CIRCLE_STRIP / 2 : h / 2;
     const n = c.contributors.length;
     const det = p.detail(c);
     const rings = new Map(det.rings.map((g) => [g.set, g]));
@@ -307,8 +341,6 @@ function UpsetMatrix(p: MatrixProps) {
     const bg = isSel ? "var(--accent-bg)" : "var(--panel)";
     const name = rowName(c.sets);
     const cxs = cols.flatMap((s, ci) => (c.sets.includes(s) ? [colX(ci) + CIRCLE_X] : []));
-    const base = h - 5, hh = h - 9;
-    const sh = Math.min(14, h - 4), sy = (h - sh) / 2;
     const barTip = (ev: React.MouseEvent) => tip(ev, name, [
       modeName,
       `contributors: ${n}`,
@@ -335,58 +367,8 @@ function UpsetMatrix(p: MatrixProps) {
           {cols.map((s, ci) => !c.sets.includes(s) && !rings.has(s) && <Dot key={s} cx={colX(ci) + CIRCLE_X} cy={cy} r={r} member={false} />)}
           {cxs.length > 1 && <line x1={Math.min(...cxs)} x2={Math.max(...cxs)} y1={cy} y2={cy} stroke="var(--ink)" strokeWidth={isSel ? Math.min(3.5, r) : Math.min(2.5, r * 0.8)} />}
         </g>
-        {lod !== "minimal" && cols.map((s, ci) => {
-          const member = c.sets.includes(s);
-          const ring = rings.get(s);
-          if (!member && !ring) return null;
-          const x0 = colX(ci) + HIST_X;
-          const counts = member ? det.hists[c.sets.indexOf(s)] : ring!.hist;
-          const tau = tauOf(threshold, s);
-          return (
-            <g key={s}>
-              <rect x={x0 - 4} y={1.5} width={HIST_W + 8} height={h - 3} fill={bg} />
-              {lod === "full" ? (
-                <>
-                  {tau !== null && member && <rect x={x0} y={base - hh} width={tau * HIST_W} height={hh} fill="var(--ink)" fillOpacity={0.03} />}
-                  <line x1={x0} x2={x0 + HIST_W} y1={base} y2={base} className="fu-hist-axis" />
-                  {tau !== null && <line x1={x0 + tau * HIST_W} x2={x0 + tau * HIST_W} y1={base} y2={base + 3} className="fu-hist-tick" />}
-                  <g opacity={dim}>
-                    {isSel && reference?.band && member && (
-                      <rect x={x0 + reference.band.from * HIST_W} y={base - hh} width={(reference.band.to - reference.band.from) * HIST_W} height={hh} fill="var(--select)" fillOpacity={0.14} />
-                    )}
-                    <Hist x={x0} base={base} h={hh} counts={counts} maxC={maxBin} color={member ? "var(--accent)" : "var(--near-ring)"} tint={member ? 0.3 : 0.35} />
-                  </g>
-                </>
-              ) : (
-                <g opacity={dim}>
-                  <Strip x={x0} y={sy} h={sh} counts={counts} maxC={maxBin} ring={!member} />
-                </g>
-              )}
-              {counts.map((kk, b) => (
-                <rect
-                  key={b} x={x0 + (b * HIST_W) / N_BINS} y={1} width={HIST_W / N_BINS} height={h - 2} fill="transparent"
-                  onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${name} · ${names[s]}`, member
-                    ? [`${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`, `of ${plural(n)} contributing (${modeName})`]
-                    : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors"]))}
-                />
-              ))}
-              {isSel && reference && member && (
-                <g>
-                  {lod === "full"
-                    ? <line x1={x0 + reference.value * HIST_W} x2={x0 + reference.value * HIST_W} y1={2} y2={base} stroke="var(--select)" strokeWidth={1.5} strokeDasharray="3 2" pointerEvents="none" />
-                    : <line x1={x0 + reference.value * HIST_W} x2={x0 + reference.value * HIST_W} y1={sy - 2} y2={sy + sh + 2} stroke="var(--select)" strokeWidth={2} pointerEvents="none" />}
-                  <rect
-                    x={x0 + reference.value * HIST_W - 3} y={1} width={6} height={h - 2} fill="transparent"
-                    onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, reference.label, [
-                      `${reference.who}: ${names[s]} = ${fmt(reference.membership(s))}`,
-                      ...(reference.band ? [`component band ${fmt(reference.band.from)}–${fmt(reference.band.to)} (width ${fmt(reference.band.component)})`] : []),
-                    ]))}
-                  />
-                </g>
-              )}
-            </g>
-          );
-        })}
+        {lod === "full" && fullCells(c, h, det, rings, isSel, dim, name)}
+        {lod === "compact" && compactCells(c, h, det, rings, isSel, dim, bg, name)}
         <g opacity={dim}>
           {cols.map((s, ci) => {
             const member = c.sets.includes(s);
@@ -407,8 +389,160 @@ function UpsetMatrix(p: MatrixProps) {
             );
           })}
         </g>
-        {isSel && reference && lod !== "minimal" && <text className="fu-ref-lbl" x={colX(k) + 4} y={cy + 3.5}>{reference.label}</text>}
+        {isSel && reference && lod === "compact" && <text className="fu-ref-lbl" x={colX(k) + 4} y={cy + 3.5}>{reference.label}</text>}
       </Moving>
+    );
+  };
+
+  /** Compact cells: a vertical strip of the 5 bins right of each circle; the reference element as a tick across it. */
+  const compactCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, bg: string, name: string) => {
+    const n = c.contributors.length;
+    const sh = h - 4, sy = 2, bh = sh / N_BINS;
+    return cols.map((s, ci) => {
+      const member = c.sets.includes(s);
+      const ring = rings.get(s);
+      if (!member && !ring) return null;
+      const x0 = colX(ci) + STRIP_X;
+      const counts = member ? det.hists[c.sets.indexOf(s)] : ring!.hist;
+      return (
+        <g key={s}>
+          <rect x={x0 - 3} y={1} width={STRIP_W + 6} height={h - 2} fill={bg} />
+          <g opacity={dim}><VStrip x={x0} y={sy} h={sh} counts={counts} maxC={p.maxBin} ring={!member} /></g>
+          {counts.map((kk, b) => (
+            <rect
+              key={b} x={x0} y={sy + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill="transparent"
+              onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${name} · ${names[s]}`, member
+                ? [`${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`, `of ${plural(n)} contributing (${modeName})`]
+                : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors"]))}
+            />
+          ))}
+          {isSel && reference && member && (
+            <line x1={x0 - 3} x2={x0 + STRIP_W + 3} y1={sy + (1 - reference.value) * sh} y2={sy + (1 - reference.value) * sh} stroke="var(--select)" strokeWidth={2} pointerEvents="none" />
+          )}
+        </g>
+      );
+    });
+  };
+
+  /**
+   * Full cells: per set of the row, the points (contributors at their original membership, jittered left of the axis)
+   * and the half violin right of it; rings get a grey violin. The reference element's profile: a curve through its
+   * points, a dashed line at its minimum and (additive) the band from the outside maximum to the inside minimum.
+   */
+  const fullCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, name: string) => {
+    const n = c.contributors.length;
+    const pTop = PLOT_TOP, pBot = h - CIRCLE_STRIP;
+    const yOf = (v: number) => pBot - v * (pBot - pTop);
+    const vals = p.values(c);
+    const part = cols.flatMap((s, ci) => (c.sets.includes(s) ? [{ s, ci, j: c.sets.indexOf(s) }] : []));
+    const gx0 = colX(0) + JIT_X, gx1 = colX(k - 1) + AXIS_X + HIST_W;
+    const px0 = colX(part[0].ci) + JIT_X, px1 = colX(part[part.length - 1].ci) + AXIS_X + HIST_W;
+    // the reference element in this row: in the selected row, or in every row with "Profile in all rows"
+    const x = p.refElem;
+    const at = x !== null && (isSel ? reference !== null : p.profileAll) ? indexOfSorted(vals.idx, x) : -1;
+    const ref = at >= 0 ? x! : null;
+    const refV = (j: number) => vals.values[j][at];
+    const refMin = ref === null ? 0 : isSel && reference ? reference.value : Math.min(...part.map((q) => refV(q.j)));
+    const profile = ref === null ? [] : part.map((q) => [colX(q.ci) + pointDx(ref), yOf(refV(q.j))] as const);
+    const shown = pointsToDraw(vals.idx, ref);
+    const capped = n > MAX_POINTS;
+    const ptTip = (ev: React.MouseEvent) => {
+      const d = (ev.target as SVGElement).dataset;
+      if (d?.x === undefined) return;
+      ev.stopPropagation();
+      const xi = +d.x, s = +d.s!;
+      tip(ev, `${p.elemLabel(xi)}: ${names[s]} = ${fmt(+d.v!)}`, [xi === ref && isSel ? "click: clear the reference element" : "click: show this element's profile"]);
+    };
+    const ptClick = (ev: React.MouseEvent) => {
+      const d = (ev.target as SVGElement).dataset;
+      if (d?.x === undefined) return;
+      ev.stopPropagation();
+      p.onPick(c.key, +d.x);
+    };
+    const cellTip = (s: number, b: number, member: boolean) => (ev: React.MouseEvent) => {
+      ev.stopPropagation();
+      if (member) {
+        const kk = det.hists[c.sets.indexOf(s)][b];
+        tip(ev, `${names[s]} in ${name}: ${n.toLocaleString("en-US")} ${n === 1 ? "contributor" : "contributors"}`, [
+          `${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`,
+          modeName,
+          ...(capped ? [`points hidden above ${MAX_POINTS} contributors`] : []),
+        ]);
+      } else {
+        const g = rings.get(s)!;
+        tip(ev, `below τ but near ${names[s]}: ${g.values.length} of ${g.contributors} contributors`, [`${binLabel(b)}: ${plural(g.hist[b])}`, "not counted in masses or contributors"]);
+      }
+    };
+    return (
+      <g>
+        {/* membership gridlines and the 0 / 1 labels, once per row */}
+        {GRID.map((v) => <line key={v} x1={gx0} x2={gx1} y1={yOf(v)} y2={yOf(v)} className="fu-grid" />)}
+        <text className="bar-hd" x={gx0 - 3} y={yOf(0) + 3} textAnchor="end">0</text>
+        <text className="bar-hd" x={gx0 - 3} y={yOf(1) + 3} textAnchor="end">1</text>
+        {cols.map((s, ci) => {
+          const member = c.sets.includes(s);
+          const ring = rings.get(s);
+          if (!member && !ring) return null;
+          const ax = colX(ci) + AXIS_X;
+          const tau = tauOf(threshold, s);
+          const v = member ? vals.values[c.sets.indexOf(s)] : ring!.values;
+          return (
+            <g key={s}>
+              {tau !== null && member && <rect x={colX(ci) + JIT_X} y={yOf(tau)} width={AXIS_X + HIST_W - JIT_X} height={yOf(0) - yOf(tau)} fill="var(--ink)" fillOpacity={0.03} />}
+              <line x1={ax} x2={ax} y1={yOf(0)} y2={yOf(1)} className="fu-hist-axis" />
+              {tau !== null && <line x1={ax - 3} x2={ax + 3} y1={yOf(tau)} y2={yOf(tau)} className="fu-hist-tick" />}
+              <g opacity={dim}>
+                {v.length > 0 && <Violin ax={ax} f={violinOf(v).f} maxF={maxF} yOf={yOf} color={member ? "var(--accent)" : "var(--near-ring)"} />}
+              </g>
+              {BIN_EDGES.map((lo, b) => (
+                <rect key={b} x={ax} y={yOf(binTop(b))} width={HIST_W} height={yOf(lo) - yOf(binTop(b))} fill="transparent" onMouseMove={cellTip(s, b, member)} />
+              ))}
+            </g>
+          );
+        })}
+        {isSel && reference?.band && ref !== null && (
+          <rect x={px0} y={yOf(reference.band.to)} width={px1 - px0} height={yOf(reference.band.from) - yOf(reference.band.to)} fill="var(--select)" fillOpacity={0.14} pointerEvents="none" />
+        )}
+        {ref !== null && (
+          <g>
+            <line x1={px0} x2={px1} y1={yOf(refMin)} y2={yOf(refMin)} stroke="var(--select)" strokeWidth={1.5} strokeDasharray="4 3" pointerEvents="none" />
+            <rect
+              x={px0} y={yOf(refMin) - 3} width={px1 - px0} height={6} fill="transparent"
+              onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, isSel && reference ? reference.label : `${p.elemLabel(ref)}: min = ${fmt(refMin)}`, [
+                part.map((q) => `${names[q.s]} = ${fmt(refV(q.j))}`).join(", "),
+                ...(isSel && reference?.band ? [`component band ${fmt(reference.band.from)}–${fmt(reference.band.to)} (width ${fmt(reference.band.component)})`] : []),
+              ]))}
+            />
+          </g>
+        )}
+        {profile.length > 1 && (
+          <g>
+            <path
+              d={profilePath(profile)} fill="none" stroke="transparent" strokeWidth={8}
+              onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${p.elemLabel(ref!)} in ${name}`, part.map((q) => `${names[q.s]} = ${fmt(refV(q.j))}`)))}
+            />
+            <path d={profilePath(profile)} fill="none" stroke="var(--select)" strokeWidth={2} strokeLinecap="round" pointerEvents="none" />
+          </g>
+        )}
+        <g className="fu-pts" onClick={ptClick} onMouseMove={ptTip}>
+          {part.map((q) => {
+            const cx0 = colX(q.ci), vs = vals.values[q.j];
+            return (
+              <g key={q.s} opacity={dim}>
+                {shown.map((jj) => {
+                  const xi = vals.idx[jj];
+                  if (xi === ref) return null;
+                  return <circle key={xi} cx={cx0 + pointDx(xi)} cy={yOf(vs[jj])} r={PT_R} className="fu-pt" data-x={xi} data-s={q.s} data-v={vs[jj]} />;
+                })}
+              </g>
+            );
+          })}
+          {ref !== null && part.map((q) => (
+            <circle key={`r${q.s}`} cx={colX(q.ci) + pointDx(ref)} cy={yOf(refV(q.j))} r={PT_R_REF} className="fu-pt-ref" data-x={ref} data-s={q.s} data-v={refV(q.j)} />
+          ))}
+        </g>
+        {isSel && reference && ref !== null && <text className="fu-ref-lbl" x={colX(k) + 4} y={yOf(refMin) + 3.5}>{reference.label}</text>}
+      </g>
     );
   };
 

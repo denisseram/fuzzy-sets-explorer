@@ -133,6 +133,11 @@
 .fu-axis { stroke: var(--axis); }
 .fu-hist-axis { stroke: var(--axis); stroke-width: .8; }
 .fu-hist-tick { stroke: var(--ink-3); stroke-width: 1; }
+/* Full cells: membership gridlines, the contributors' points, the reference element's points */
+.fu-grid { stroke: var(--rule-2); stroke-width: .7; }
+.fu-pt { fill: var(--accent); fill-opacity: .55; stroke: transparent; stroke-width: 2; cursor: pointer; }
+.fu-pt:hover { fill-opacity: 1; }
+.fu-pt-ref { fill: var(--select); stroke: var(--panel); stroke-width: 1; cursor: pointer; }
 .fu-bar { transition: x .25s ease, width .25s ease; }
 .fu-bar-out { fill: var(--accent); fill-opacity: .1; stroke: var(--accent); stroke-width: 1; }
 .fu-bar-in { fill: var(--accent); }

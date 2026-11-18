@@ -77,15 +77,17 @@ function Explorer({ ds }: { ds: Dataset }) {
           give its inclusive value, and summed over all rows they give the element's largest membership.
           <br /><br />
           <strong>Bars</strong>: outline = contributors (elements with a value above 0 in the row), solid = membership mass
-          (the sum of their values), on one axis. <strong>Histograms</strong>: the contributors' original memberships in
-          that set, 0 (left) to 1 (right), one count scale for all. <strong>Reference element</strong>: a dashed line at its
-          minimum over the row's sets; in additive mode the shaded band is its contribution.
+          (the sum of their values), on one axis. <strong>Cells</strong>: one point per contributor at its original
+          membership in that set (0 bottom, 1 top), and a half violin of the same values (smoothed counts, one scale for
+          all). <strong>Reference element</strong>: click a point (or pick it in the field) to draw that element's
+          profile across the row and a dashed line at its minimum over the row's sets; in additive mode the shaded band
+          is its contribution.
           <br /><br />
           <strong>Threshold</strong>: memberships below τ count as 0. A grey ring marks a set outside the row that enough
           contributors nearly reach (from β·τ up to τ); its hole shrinks as their mean approaches τ.
           <br /><br />
-          <strong>Many rows</strong>: Filters, Group by, Sort and Query work as in UpSet. Rows shrink to fit (Rows: full
-          histograms, grayscale strips, or circles only); Fish-eye enlarges the rows around the hovered one; with a row
+          <strong>Many rows</strong>: Filters, Group by, Sort and Query work as in UpSet. Rows shrink to fit (Rows: points
+          and violins, grayscale strips, or circles only; the selected row stays full); Fish-eye enlarges the rows around the hovered one; with a row
           selected, Neighbourhood keeps the rows within 1–3 set changes. The scale above the bars sets their range
           (longer bars wrap). Snapshot stores the ranking to compare it with later settings (e.g. another τ).
           {ds.sets.kind === "crisp" && (

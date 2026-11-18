@@ -101,34 +101,42 @@ Under the title: "Showing 37 of 412 nonzero combinations" (section 11.2).
 - One **row** per combination of the selected sets with membership mass > 0 in the active mode. Rows with zero mass
   are hidden unless **Show empty rows** (Filters) is on; that option is disabled above 10 selected sets. Default
   order: number of sets ascending, then lexicographic by column order.
-- One **column** per selected set: its name, the histogram of all its memberships > 0 (τ_i marked in threshold
-  mode), and the 0–1 axis of the histograms below.
+- One **column** per selected set: its name and the histogram of all its memberships > 0 (τ_i marked in threshold
+  mode), membership 0 left to 1 right.
 - **Circles** (one size) joined by a **connector** mark the sets of a row. They only identify the combination and
   never encode membership. Sets outside the row are light empty dots.
 - **Summary bars** left of the matrix, on one shared axis "elements", growing leftward: the outline is the number of
   **contributors**, the solid bar the **membership mass** in the active mode. Mass ≤ contributors, since each
   contributor adds at most 1; their ratio is the mean contribution. The axis range is adjustable (section 11.6); by
   default it is the largest inclusive row (fixed across modes), so bars can be compared when switching.
-- **Histograms**: in each cell of a set in the row, right of the circle.
+- **Points and half violins**: in each cell of a set in the row, above the circle (section 4).
 
 The panel ends with the dataset's size, notes and attribution. **ⓘ** next to the title summarises this guide.
 
-## 4. Membership histograms
+## 4. Points and half violins
 
-In each cell of a set *i* in row *T*, a histogram of the row's **contributors'** **original** memberships in *i*
-(not minima, not components, not thresholded values):
+In each cell of a set *i* in row *T*, the row's **contributors'** **original** memberships in *i* (not minima, not
+components, not thresholded values):
 
 - **Population**, the same for every set of the row: inclusive mode, elements with `inclusiveMembership(x, T) > 0`;
   additive mode, elements with `component(x, T) > 0`; in threshold mode decided with *m'*.
-- **X**: membership, 0 at the left edge, 1 at the right edge; 72 px for every histogram.
-- **Bins**: [0, 0.2), [0.2, 0.4), [0.4, 0.6), [0.6, 0.8), [0.8, 1.0], by explicit edges (not floor(v / 0.2), which
-  puts 0.6 in the wrong bin and 1.0 in a sixth). Binning is display only.
-- **Y**: number of elements per bin, bars growing up from the row's baseline, plus a monotone curve through the bin
-  centres (no overshoot) with a light fill. One count scale for every histogram on screen (mode, sets and τ fixed).
-- No contributors: only the baseline.
-- Each histogram sits on an opaque background drawn over the connector, so the connector visibly runs from circle to
-  circle and is interrupted by the distributions. Histogram axes are thin and light grey.
-- Threshold mode: a short tick marks τ on the axis and [0, τ) is shaded very lightly.
+- **Y**: membership, 0 at the bottom of the plot area, 1 at the top; light gridlines at 0.2, 0.4, 0.6, 0.8; "0" and
+  "1" once per row, left of the first cell. A thin vertical axis line per cell.
+- **Points**: one per contributor, at its membership, in a 22 px jitter strip left of the axis (radius 2.5 px). The
+  horizontal offset is a hash of the element's index: the same in every cell of the row and across mode, τ and
+  selection changes. Above **200 contributors** a row draws no points (except the reference element's, section 6).
+- **Half violin**, right of the axis, up to 72 px wide: smoothed counts
+
+      f(y) = 0.2 × Σ_k [ K_h(y − v_k) + K_h(y + v_k) + K_h(y − (2 − v_k)) ]
+
+  with a Gaussian kernel K_h, h = 0.06, reflected at 0 and 1 so no mass leaves [0, 1], evaluated at y = 0, 0.02,
+  …, 1. f reads as "elements per 0.2 of membership" (its integral over [0, 1] is 0.2 · n); it is not a probability
+  density. The values are linearly binned at 0.01 first (within 0.4 % of the direct sum). One horizontal scale for
+  every violin on screen: the largest f over the visible Full cells is the full width.
+- No contributors: only the axis.
+- The circles and the connector sit in a strip at the bottom of the row, under the axes, so they never overlap points
+  or violins.
+- Threshold mode: a short tick marks τ (τ_i) on the axis and [0, τ) is shaded very lightly across the cell.
 
 ## 5. Threshold sidebar and rings
 
@@ -140,21 +148,29 @@ The sidebar (only in threshold mode) holds:
 
 **Rings.** In a row, a set outside the combination gets a ring instead of the light dot when at least the ring share
 of the row's contributors have β·τ ≤ m < τ in it (original values). The ring is a grey disc with a white hole that
-shrinks as the mean of those memberships approaches τ. Next to it, a mini histogram of those memberships in the
-lighter ring colour, on the same axis and count scale. Rings never enter masses, counts or the reference line.
+shrinks as the mean of those memberships approaches τ. Above it (Full rows), a grey half violin of those memberships
+on the same scale; in Compact rows a grey strip. Rings never enter masses, counts or the reference line.
 Tooltip: "2 of 3 contributors have 0.25 ≤ C < 0.50; mean 0.41".
 
 ## 6. Reference element
 
-The reference line shows the intersection minimum of **one** element: not an aggregate, not a mean or a threshold.
+The reference shows **one** element: not an aggregate, not a mean or a threshold. Choose it in the field, or click
+one of its points: that element becomes the reference (the field follows) and its row is selected. Clicking the same
+point again, Escape or ✕ clears it.
 
-For the selected element *x* and the selected row *T*: `referenceValue = min over i ∈ T of m(x, i)` (original values,
-also in threshold mode). A dashed red vertical line at that value is drawn in the histograms of every set of *T*, and
-a label right of the matrix reads, e.g., "E1: min(A, B) = 0.70". The line's tooltip adds *x*'s membership in that set
-and its metadata.
+For the reference element *x* and the selected row *T* (Full rows):
 
-In additive mode the line still shows the inclusive minimum. A red band from `outsideMaximum` to `insideMinimum` is
-shaded on the histograms: its width is exactly `component(x, T)` (with *m'* in threshold mode).
+- **Profile**: a red curve (2 px) through *x*'s points in the cells of *T*, left to right. Each step is one cubic
+  Bézier segment with control points (xm, y0) and (xm, y1), xm the midpoint: it leaves and enters each point
+  horizontally and never leaves the range of the two points it joins, so the profile's lowest point is *x*'s minimum.
+  The curve is drawn under the points; *x*'s points are larger and red. A one-set row has no curve.
+- **Dashed line** at `referenceValue = min over i ∈ T of m(x, i)` (original values, also in threshold mode), across
+  the cells of *T*, with the label right of the matrix, e.g. "E1: min(A, B) = 0.70". Its tooltip adds *x*'s
+  memberships and metadata. Compact rows: a red tick across each strip.
+- **Additive mode**: the line still shows the inclusive minimum; a red band from `outsideMaximum` to `insideMinimum`
+  spans the cells of *T*: its height is exactly `component(x, T)` (with *m'* in threshold mode).
+- **Profile in all rows** (next to the field): *x*'s curve and dashed line in every visible Full row where *x*
+  contributes.
 
 Rules: the field offers only the contributors of the selected row in the active mode (and τ). No reference by
 default. When the row, mode, sets or τ change, the element is kept if it still contributes, otherwise cleared.
@@ -165,7 +181,9 @@ default. When the row, mode, sets or τ change, the element is kept if it still 
   selected row is tinted, its connector is thicker, and the other rows fade.
 - The selected row persists across mode and τ changes; it is cleared when one of its sets is deselected.
 - Everything is recalculated when the selected sets, the mode or τ change.
-- Tooltips: bars (contributors, mass, mean), histogram bins (range and count), circles and rings, the reference line.
+- Tooltips: bars (contributors, mass, mean), violins ("A in A ∩ B: 1,240 contributors" and the count of the 0.2 bin
+  under the pointer), points ("P12: A = 0.62"), the profile curve (the element's memberships in the row's sets),
+  circles and rings, the reference line.
 
 ## 8. Correctness fixture
 
@@ -184,8 +202,8 @@ in the unit tests:
 Without threshold, component masses (contributors): A 0.1 (E1) · B 0.5 (E2) · C 0 · AB 0.8 (E1, E4) · AC 0 ·
 BC 0.2 (E2) · ABC 0.7 (E1, E2).
 
-Inclusive A ∩ B: mass 1.5, contributors E1, E2, E4; histograms A [0.8, 0.2, 0.6], B [0.7, 0.9, 0.6]; with E1 as
-reference, the line is at 0.7 in both. Additive AB: mass 0.8, contributors E1, E4; E1's band runs from 0.5 to 0.7.
+Inclusive A ∩ B: mass 1.5, contributors E1, E2, E4; points A [0.8, 0.2, 0.6], B [0.7, 0.9, 0.6]; clicking E1's point
+draws its profile from (A, 0.8) to (B, 0.7) and the dashed line at 0.70. Additive AB: mass 0.8, contributors E1, E4 (points A [0.8, 0.6], B [0.7, 0.6]); E1's band runs from 0.5 to 0.7.
 
 Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 
@@ -195,17 +213,20 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 
 ## 9. Colours and sizes
 
-- Navy (#282C5F): bars and histograms. Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
-  Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference line, band, label and τ marks.
+- Navy (#282C5F): bars, histograms, violins (fill 14 %) and points (55 %). Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
+  Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference profile, line, band, label and τ marks.
 - Compact strips: ink at opacity 0.1 + 0.85 · count / max (grayscale on the shared count scale).
 - Rank changes: green #2E8540 (moved up), red #B91C1C (moved down); stubs #D5D7DD.
-- Rows: Full 30 px (Auto: 28–30), Compact 18 px (Auto: 12–27), Minimal 9 px (Auto: 6–11). Group headers 18–22 px,
-  stubs 5 px (a 3 px line). Histograms and strips 72 px wide; circles of radius 6.5 px (smaller in short rows).
+- Rows: Full 86 px (Auto: 80–86; plot area 56 px over a 24 px circle strip), Compact 24 px (Auto: 12–79), Minimal
+  9 px (Auto: 6–11). Group headers 18–22 px, stubs 5 px (a 3 px line). Cells 116 px: 22 px jitter strip, axis, violin
+  up to 72 px. Compact strips 16 px wide. Circles of radius 6.5 px (smaller in short rows).
 
 ## 10. Caveats
 
-- **One count scale.** A row with many contributors sets the scale for all; histograms of small rows can be almost
-  flat (MovieLens, additive mode). Hover the bins for exact counts.
+- **One count scale.** A row with many contributors sets the scale for all; violins of small rows can be almost
+  flat (MovieLens, additive mode). Hover a violin for exact counts. The scale follows the visible Full rows, so it
+  changes when scrolling.
+- **Few points.** With a handful of contributors the violin is a sum of narrow bumps; read the points.
 - **Many tiny memberships.** Without a threshold any membership above 0 makes an element a contributor; with Tag
   Genome scores almost every movie contributes to every inclusive row. Threshold mode removes those.
 - **Dense data, many sets.** When almost every element has every membership > 0 (MovieLens), inclusive mode has up to
@@ -274,10 +295,11 @@ that pass the filters.
 
 ### 11.5 Level of detail (Rows)
 
-Auto (default) | Full | Compact | Minimal. Auto picks the largest row height (at most 30 px) at which all rows fit in
-the plot's visible height, never below 6 px; the level follows from the height: **Full** (≥ 28 px) the histogram with
-its curve; **Compact** (12–27 px) a strip of the 5 bins as grayscale cells (darker = more elements, shared count
-scale); **Minimal** (< 12 px) circles and connector only. The reference line becomes a red tick on the strip
+Auto (default) | Full | Compact | Minimal. Auto keeps the selected row and the fish-eye focus rows Full and gives the
+other rows the largest height (at most 86 px) at which all rows fit in the plot's visible height, never below 6 px;
+the level follows from the height: **Full** (≥ 80 px) points, half violins and profiles; **Compact** (12–79 px) a
+vertical strip of the 5 bins stacked bottom ([0, 0.2)) to top as grayscale cells (darker = more elements, shared
+count scale); **Minimal** (< 12 px) circles and connector only. The reference becomes a red tick across the strip
 (Compact) and is hidden (Minimal); rings stay rings. Only the rows near the visible part are drawn.
 
 ### 11.6 Adjustable scale and horizon bars
@@ -290,8 +312,8 @@ independently.
 
 ### 11.7 Fish-eye
 
-Off by default. When on and the rows overflow, the hovered row (after 150 ms) or else the selected row and 3
-neighbours on each side get Full height; the others share the rest of the height (never below 6 px); if that does not
+Off by default. The hovered row (after 150 ms) or else the selected row and 3 neighbours on each side get Full
+height: always with Rows = Auto, otherwise when the rows overflow; the others share the rest of the height (never below 6 px); if that does not
 fit, the rows farthest from the focus become stubs.
 
 ### 11.8 Lattice neighbourhood

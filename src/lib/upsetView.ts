@@ -127,22 +127,50 @@ export const describeQuery = (clauses: readonly Clause[], names: readonly string
 export type Lod = "full" | "compact" | "minimal";
 export type LodSetting = "auto" | Lod;
 
-/** Row heights: Full ≥ 28 px, Compact 12–27 px, Minimal < 12 px (never below ROW_MIN). */
-export const FULL_MIN = 28, COMPACT_MIN = 12;
-export const ROW_FULL = 30, ROW_COMPACT = 18, ROW_MINIMAL = 9, ROW_MIN = 6;
+/** Row heights: Full ≥ 80 px, Compact 12–79 px, Minimal < 12 px (never below ROW_MIN). */
+export const FULL_MIN = 80, COMPACT_MIN = 12;
+export const ROW_FULL = 86, ROW_COMPACT = 24, ROW_MINIMAL = 9, ROW_MIN = 6;
 
 export const lodOf = (h: number): Lod => (h >= FULL_MIN ? "full" : h >= COMPACT_MIN ? "compact" : "minimal");
 
 /**
- * Row height for a setting. Auto: the largest height (at most Full) at which `n` rows fit in `avail` px, so the level
- * is the largest one at which all rows fit; never below ROW_MIN (Minimal), in which case the rows overflow.
+ * Row height for a setting. Auto: `nFull` of the `n` rows are always Full (the selected row, the fish-eye focus rows);
+ * the others get the largest height (at most Full) at which they fit in the rest of `avail` px, so their level is the
+ * largest one at which all rows fit; never below ROW_MIN (Minimal), in which case the rows overflow.
  */
-export function rowHeight(setting: LodSetting, n: number, avail: number): number {
+export function rowHeight(setting: LodSetting, n: number, avail: number, nFull = 0): number {
   if (setting === "full") return ROW_FULL;
   if (setting === "compact") return ROW_COMPACT;
   if (setting === "minimal") return ROW_MINIMAL;
-  if (n <= 0) return ROW_FULL;
-  return Math.max(ROW_MIN, Math.min(ROW_FULL, Math.floor(avail / n)));
+  const others = n - nFull;
+  if (others <= 0) return ROW_FULL;
+  return Math.max(ROW_MIN, Math.min(ROW_FULL, Math.floor((avail - nFull * ROW_FULL) / others)));
+}
+
+/**
+ * Ids of the shown rows that Auto keeps at Full height: every entry of the selected row (rows repeat across groups)
+ * and, with a fish-eye focus, the focus and `radius` shown rows on each side.
+ */
+export function autoFullRows(entries: readonly Entry[], selected: string | null, focus: string | null, radius = FISHEYE_RADIUS): Set<string> {
+  const out = new Set<string>();
+  const shown = entries.filter((e): e is Extract<Entry, { kind: "row" }> => e.kind === "row" && !e.hidden);
+  for (const e of shown) if (e.combo.key === selected) out.add(e.id);
+  const f = focus === null ? -1 : shown.findIndex((e) => e.id === focus);
+  if (f >= 0) for (const e of shown.slice(Math.max(0, f - radius), f + radius + 1)) out.add(e.id);
+  return out;
+}
+
+// ---- reference element ---------------------------------------------------------------------------------------------
+
+/** "E1: min(A, B) = 0.70": the reference element's label (set names in column order). */
+export const referenceLabel = (who: string, setNames: readonly string[], value: number) => `${who}: min(${setNames.join(", ")}) = ${value.toFixed(2)}`;
+
+/**
+ * A click on element x's point in row `key`: x becomes the reference element and the row is selected; a click on the
+ * reference element's point in the selected row clears the reference (the row stays selected).
+ */
+export function pickReference(cur: { selected: string | null; refX: number | null }, key: string, x: number): { selected: string; refX: number | null } {
+  return cur.refX === x && cur.selected === key ? { selected: key, refX: null } : { selected: key, refX: x };
 }
 
 // ---- horizon bars (UpSet's adjustable scale) -----------------------------------------------------------------------
@@ -238,25 +266,34 @@ export type LayoutOptions = {
   fisheye: { focus: string | null; avail: number } | null;
   /** Rows on each side of the focus that also get Full height. */
   radius?: number;
+  /** Ids of rows that always get Full height (Auto: the selected row and the fish-eye focus rows). */
+  full?: ReadonlySet<string>;
 };
 
+/** Rows on each side of the fish-eye focus that get Full height. */
+export const FISHEYE_RADIUS = 3;
+
 /**
- * Positions of the display list. Consecutive hidden rows (same reason) merge into one stub. Fish-eye (when on, with a
- * focus, and when the rows overflow): the focus and `radius` neighbours on each side get Full height; the others share
- * the rest of the height (never below ROW_MIN); if even ROW_MIN does not fit, the rows farthest from the focus become
- * stubs ("fisheye").
+ * Positions of the display list. Consecutive hidden rows (same reason) merge into one stub. Rows in `full` are Full.
+ * Fish-eye (when on, with a focus, and when the rows overflow): the focus and `radius` neighbours on each side get Full
+ * height; the others share the rest of the height (never below ROW_MIN); if even ROW_MIN does not fit, the rows
+ * farthest from the focus become stubs ("fisheye").
  */
 export function layout(entries: readonly Entry[], o: LayoutOptions): { items: Placed[]; height: number } {
-  const radius = o.radius ?? 3;
+  const radius = o.radius ?? FISHEYE_RADIUS;
+  const full = o.full ?? new Set<string>();
   let list = entries.slice();
   const heights = new Map<string, number>();
+  for (const id of full) heights.set(id, ROW_FULL);
   if (o.fisheye && o.fisheye.focus) {
     const c = countEntries(list);
-    const total = c.rows * o.rowH + c.headers * o.headerH + c.stubs * STUB_H;
     const shown = list.flatMap((e, i) => (e.kind === "row" && !e.hidden ? [i] : []));
+    const nFull = shown.filter((i) => full.has(list[i].id)).length;
+    const total = (c.rows - nFull) * o.rowH + nFull * ROW_FULL + c.headers * o.headerH + c.stubs * STUB_H;
     const f = shown.findIndex((i) => list[i].id === o.fisheye!.focus);
     if (f >= 0 && total > o.fisheye.avail) {
       const near = new Set(shown.slice(Math.max(0, f - radius), f + radius + 1));
+      for (const i of shown) if (full.has(list[i].id)) near.add(i);
       const others = shown.filter((i) => !near.has(i));
       // room for the other rows: headers, existing stubs and up to two fish-eye stubs per header-separated segment
       const fixed = c.headers * o.headerH + (c.stubs + 2 * (c.headers + 1)) * STUB_H + near.size * ROW_FULL;
