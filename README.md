@@ -1,7 +1,12 @@
 # Fuzzy Sets Explorer
 
-One UpSet plot for fuzzy sets. Rows are all combinations of up to 6 selected sets; membership distributions are drawn
-inside the combination matrix. Live: https://denisseram.github.io/fuzzy-sets-explorer/
+One UpSet plot for fuzzy sets. Rows are the nonzero combinations of up to 20 selected sets; membership distributions
+are drawn inside the combination matrix. Live: https://denisseram.github.io/fuzzy-sets-explorer/
+
+Scales to 20 sets, thousands of rows and 50,000 elements without building all 2^|K| combinations (per-element chains
+for additive rows, a pruned level-wise enumeration for inclusive rows), with UpSet's filters, aggregation, sorting,
+queries and adjustable scale, levels of detail, fish-eye, lattice-neighbourhood focus, and snapshots for comparing
+rankings (e.g. across τ). See [docs/guide.md](docs/guide.md), section 11.
 
 ## The model
 
@@ -40,7 +45,15 @@ npm run dev          # http://localhost:4321/?dataset=fixture
 npm test             # Vitest
 npm run build
 npx astro check
+npm run bench        # row computation on 50,000 synthetic elements (not part of npm test)
 ```
 
-Calculations: [src/lib/fuzzyDecomposition.ts](src/lib/fuzzyDecomposition.ts) (pure, tested in
-[src/lib/fuzzyDecomposition.test.ts](src/lib/fuzzyDecomposition.test.ts)).
+Benchmark (Node 22.20, Apple laptop; 50,000 elements, |K| = 20, 1–4 positive memberships each; median of 7):
+additive 25 ms, inclusive with minMass = 0 48 ms (5,825 nonzero rows each); with τ = 0.3: 17 ms and 35 ms. Targets:
+300 ms and 1 s. Dense extreme (every membership > 0): additive 0.9 s; inclusive stops at the budget after degree 1.
+
+Calculations: [src/lib/fuzzyDecomposition.ts](src/lib/fuzzyDecomposition.ts); display logic (filters, groups, queries,
+level of detail, horizon bars, neighbourhoods, layout, snapshots): [src/lib/upsetView.ts](src/lib/upsetView.ts). Both
+pure, tested in [src/lib/fuzzyDecomposition.test.ts](src/lib/fuzzyDecomposition.test.ts) and
+[src/lib/scalability.test.ts](src/lib/scalability.test.ts) against the brute-force oracle
+[src/lib/bruteForce.ts](src/lib/bruteForce.ts).
