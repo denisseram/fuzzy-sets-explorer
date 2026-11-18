@@ -65,9 +65,10 @@ function Explorer({ ds }: { ds: Dataset }) {
       <p className="panel-title">
         Fuzzy UpSet
         <InfoPopover label="About this view">
-          <strong>Rows</strong> are all combinations of the selected {ds.sets.title}; black circles joined by a line mark
-          the sets of a row (they only identify it). Every {ds.obsWord.replace(/s$/, "")} has a membership from 0 to 1 in
-          each set.
+          <strong>Rows</strong> are the combinations of the selected {ds.sets.title} (up to 20) with a membership mass
+          above 0; black circles joined by a line mark the sets of a row (they only identify it). Every{" "}
+          {ds.obsWord.replace(/s$/, "")} has a membership from 0 to 1 in each set. Add sets from the shelf above the plot
+          (click or drag into the header row); drag a header out to remove it.
           <br /><br />
           <strong>Inclusive intersections</strong>: an element counts in a row with the smallest of its memberships in the
           row's sets (other sets unrestricted), so it can count in many rows.{" "}
@@ -82,6 +83,11 @@ function Explorer({ ds }: { ds: Dataset }) {
           <br /><br />
           <strong>Threshold</strong>: memberships below τ count as 0. A grey ring marks a set outside the row that enough
           contributors nearly reach (from β·τ up to τ); its hole shrinks as their mean approaches τ.
+          <br /><br />
+          <strong>Many rows</strong>: Filters, Group by, Sort and Query work as in UpSet. Rows shrink to fit (Rows: full
+          histograms, grayscale strips, or circles only); Fish-eye enlarges the rows around the hovered one; with a row
+          selected, Neighbourhood keeps the rows within 1–3 set changes. The scale above the bars sets their range
+          (longer bars wrap). Snapshot stores the ranking to compare it with later settings (e.g. another τ).
           {ds.sets.kind === "crisp" && (
             <><br /><br /><strong>Crisp sets</strong>: memberships are 0 or 1, so the threshold has no effect.</>
           )}

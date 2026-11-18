@@ -1,10 +1,13 @@
 /* Fuzzy UpSet panel (FuzzyUpset.tsx, UpsetMatrix.tsx). Uses the theme tokens from theme.css. */
-.col-upset { display: flex; flex-direction: column; }
+.col-upset { display: flex; flex-direction: column; overflow: hidden; }
 .col-upset .panel-title { display: flex; align-items: center; gap: 6px; }
-.fu { flex: 1 0 auto; display: flex; flex-direction: column; }
+.fu { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* "Showing 37 of 412 nonzero combinations", under the plot title */
+.fu-showing { margin: 0 0 2px; font-size: 11px; color: var(--ink-2); cursor: default; }
+.fu-warn { color: #8A4B00; }
 
 /* Controls above the plot: small uppercase labels left of each control */
-.fc { display: grid; gap: 8px; margin: 6px 0 12px; }
+.fc { display: grid; gap: 6px; margin: 4px 0 8px; }
 .fc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; min-height: 26px; }
 .fc-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .fc-lbl { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
@@ -19,9 +22,38 @@
 .fu-ref:disabled { background: var(--rule-2); color: var(--ink-3); }
 .fc-sets { align-items: flex-start; flex-wrap: wrap; }
 .fc-sets .fc-lbl { line-height: 24px; }
-.fu-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.fu-chips .chip { padding: 2px 8px; font-size: 10.5px; }
-.fu-chips .chip:disabled { opacity: .4; cursor: not-allowed; }
+.fc select { font-size: 11px; height: 24px; padding: 0 4px; }
+.fc-check { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.fc-badge { display: inline-block; min-width: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 9.5px;
+  line-height: 15px; text-align: center; margin-left: 2px; }
+
+/* popovers in the controls bar (the dataset popover's style) */
+.pop { position: relative; }
+.fu-pop { z-index: 9; display: grid; gap: 8px; font-size: 12px; width: min(300px, calc(100vw - 32px)); }
+.fu-pop-wide { width: min(460px, calc(100vw - 32px)); }
+.fp-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.fp-lbl { min-width: 104px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.fp-row input[type=number] { width: 70px; font-family: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--rule); border-radius: 2px; }
+.fp-hint { margin: 0; font-size: 10.5px; color: var(--ink-3); line-height: 1.45; }
+.fp-hint svg { display: inline; vertical-align: -2px; width: 12px; height: 12px; }
+.q-grid { display: grid; gap: 3px 2px; align-items: center; }
+.q-head { font-size: 9.5px; color: var(--ink-3); text-align: center; overflow: hidden; white-space: nowrap; }
+.q-cell { all: unset; cursor: pointer; display: inline-flex; justify-content: center; padding: 2px 0; border-radius: 2px; }
+.q-cell:hover { background: var(--ground); }
+.q-cell:focus-visible { outline: 2px solid var(--accent); }
+.q-cell svg, .q-grid svg { width: 14px; height: 14px; }
+.q-text { font-size: 11px; color: var(--ink-2); padding-left: 6px; }
+.q-actions { display: flex; gap: 10px; align-items: center; }
+
+/* set shelf: the sets not selected, as chips with their membership histogram */
+.fu-shelf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 6px; min-height: 24px; }
+.fu-shelf .fc-lbl { margin-right: 4px; cursor: help; }
+.shelf-chip { padding: 1px 6px; font-size: 10.5px; gap: 5px; touch-action: none; user-select: none; }
+.shelf-chip:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.shelf-chip:disabled { opacity: .4; cursor: not-allowed; }
+.mini-hist { display: block; }
+.drag-ghost { position: fixed; z-index: 20; pointer-events: none; background: var(--accent); color: #fff; font-size: 11px; padding: 2px 8px;
+  border-radius: 2px; box-shadow: 0 2px 8px rgba(22, 25, 29, .2); }
 .fu-link { all: unset; cursor: pointer; font-size: 11px; color: var(--accent); padding: 0 4px; }
 .fu-link:focus-visible { outline: 2px solid var(--accent); }
 
@@ -29,19 +61,75 @@
 .fu-excl { margin: 0 0 8px; font-size: 11px; color: #8A4B00; cursor: help; }
 .fu-error { color: var(--select); cursor: default; }
 
-/* plot + threshold sidebar */
-.fu-body { display: flex; align-items: flex-start; gap: 16px; }
-.fu-scroll { overflow-x: auto; min-width: 0; flex: 0 1 auto; padding-bottom: 6px; }
+/* plot + threshold sidebar: the plot fills the panel's height and scrolls inside it */
+.fu-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; gap: 16px; }
+.fu-plot { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.fu-plot-wrap { position: relative; flex: 1 1 auto; min-height: 280px; }
+.fu-scroll { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; }
+.fu-head { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--rule); }
+.fu-head.fu-drop { background: var(--accent-bg); outline: 2px dashed var(--accent); outline-offset: -2px; }
 .fu svg { width: auto; height: auto; display: block; }
-.th-side { flex: 0 0 210px; display: grid; gap: 10px; border-left: 1px solid var(--rule); padding: 2px 0 2px 14px; position: sticky; top: 0; }
+.fu-jump { position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; bottom: 10px; border: 1px solid var(--accent);
+  background: var(--panel); color: var(--accent); font-family: inherit; font-size: 10.5px; border-radius: 10px; padding: 1px 10px; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(22, 25, 29, .15); }
+.fu-jump-up { bottom: auto; }
+.th-side { flex: 0 0 210px; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid var(--rule); padding: 2px 0 2px 14px; overflow-y: auto; }
 .th-side .seg button { font-size: 11px; padding: 4px 10px; }
-.th-side input[type=range] { width: 120px; }
 .th-note { margin: 0; font-size: 11px; line-height: 1.45; }
-@media (max-width: 900px) { .fu-body { flex-direction: column-reverse; } .th-side { border-left: 0; padding-left: 0; position: static; } }
+.th-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2); cursor: pointer; }
+.th-hint { font-size: 9.5px; color: var(--ink-3); }
+.th-sets { display: grid; gap: 6px; }
+.th-set { display: inline-block; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+  text-transform: none; letter-spacing: 0; color: var(--ink-2); }
+.th-side .val { font-size: 11px; min-width: 0; text-transform: none; letter-spacing: 0; }
+/* τ slider over its histogram: a 12 px thumb whose centre is exactly at τ on the 0–1 histogram axis */
+.tau-sl { position: relative; height: 34px; }
+.tau-sl svg { position: absolute; left: 0; top: 0; }
+.tau-sl input[type=range] { position: absolute; top: 18px; height: 16px; margin: 0; padding: 0; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: pointer; }
+.tau-sl input[type=range]::-webkit-slider-runnable-track { height: 2px; background: transparent; }
+.tau-sl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--accent); }
+.tau-sl input[type=range]::-moz-range-track { height: 2px; background: transparent; }
+.tau-sl input[type=range]::-moz-range-thumb { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); }
+.tau-sl input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 900px) {
+  .fu-body { flex-direction: column-reverse; }
+  .fu-plot-wrap { flex: none; height: 75vh; }
+  .th-side { border-left: 0; padding-left: 0; }
+}
 
 /* the plot */
 .fu-row { cursor: pointer; }
 .fu-row:hover .fu-row-bg { fill: var(--ground); }
+.fu-group { cursor: pointer; }
+.fu-group-bg { fill: var(--ground); stroke: var(--rule); stroke-width: 1; }
+.fu-group:hover .fu-group-bg { stroke: var(--accent); }
+.fu-group-tg { font-size: 11px; fill: var(--ink-2); }
+.fu-group-lbl { font-family: "Poppins", system-ui, sans-serif; font-size: 9.5px; font-weight: 500; fill: var(--ink); }
+.fu-stub { stroke: var(--stub); stroke-width: 3; }
+.fu-query-bg { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1; }
+.fu-query-lbl { font-family: "Poppins", system-ui, sans-serif; font-size: 11px; font-weight: 500; fill: var(--accent); }
+/* the adjustable scale: top axis 0–N, the shaded range, the lines down to the bars' axis */
+.fu-range { fill: var(--accent); fill-opacity: .18; }
+.fu-zoom { stroke: var(--axis); stroke-dasharray: 2 2; }
+.fu-range-hit { cursor: ew-resize; }
+.fu-range-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+.fu-scale-lbl { cursor: pointer; }
+.fu-scale-lbl text { font-family: "Poppins", system-ui, sans-serif; font-size: 9.5px; fill: var(--accent); }
+.fu-break line { stroke: var(--panel); stroke-width: 2; }
+.fu-col-head { cursor: grab; }
+.fu-col-head:active { cursor: grabbing; }
+.fu-tau-line { stroke: var(--select); stroke-width: 1; }
+.fu-tau-lbl { fill: var(--select); }
+/* snapshots */
+.fu-snap-lbl { font-family: "Poppins", system-ui, sans-serif; font-size: 9.5px; font-weight: 600; fill: var(--ink-2); }
+.fu-snap-x { font-size: 10px; fill: var(--ink-3); cursor: pointer; }
+.fu-snap-x:hover { fill: var(--select); }
+.fu-slope { stroke: var(--axis); stroke-width: 1; }
+.fu-slope-up { stroke: var(--rank-up); }
+.fu-slope-down { stroke: var(--rank-down); }
+.fu-slope-miss { stroke: var(--ink-3); stroke-width: 1; }
 .fu-axis { stroke: var(--axis); }
 .fu-hist-axis { stroke: var(--axis); stroke-width: .8; }
 .fu-hist-tick { stroke: var(--ink-3); stroke-width: 1; }

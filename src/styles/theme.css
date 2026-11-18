@@ -23,6 +23,11 @@
   --accent-bg: #ECEEF7;
   /* histogram axes: thin and light, so they are never confused with the connector (ink) */
   --axis: #C4C7CF;
+  /* rank changes (snapshots, re-sorting): green = moved up, red = moved down (not the selection red) */
+  --rank-up: #2E8540;
+  --rank-down: #B91C1C;
+  /* stubs: rows hidden in place */
+  --stub: #D5D7DD;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
