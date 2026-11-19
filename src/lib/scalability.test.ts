@@ -235,6 +235,15 @@ describe("level of detail", () => {
     const grouped = displayEntries(rows, groupRows(rows, "set", [A, B, C, D], NAMES), new Set(), null);
     expect(autoFullRows(grouped, "0,1", null).size).toBe(2);
   });
+  it("pinned rows are Full like the selected row and take height from the others", () => {
+    const rows = combinations([A, B, C, D]).map((T) => ({ sets: T, key: T.join(","), mass: 1, contributors: [0] }));
+    const entries = displayEntries(rows, null, new Set(), null);
+    const full = autoFullRows(entries, "0,1", null, new Set(), new Set(["2", "1,2,3"]));
+    expect([...full].sort()).toEqual(["0,1", "1,2,3", "2"]);
+    expect(autoFullRows(entries, null, null, new Set(), new Set(["2"]))).toEqual(new Set(["2"]));
+    // (600 − 3 × 86) / 12 = 28 px: the 12 other rows still fit
+    expect(rowHeight("auto", rows.length, 600, full.size)).toBe(28);
+  });
 });
 
 describe("horizon bars", () => {

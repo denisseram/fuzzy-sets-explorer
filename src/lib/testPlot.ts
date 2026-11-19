@@ -29,7 +29,7 @@ export function renderMatrix(d: Memberships, names: string[], mode: Mode, selKey
     N: d.N, range, R: Math.max(...combos.map((c) => c.contributors.length)), G: null, onRange: noop, maxBin: Math.max(1, maxBinOf(combos.map(detail))), detail,
     violinMax: violinMaxOf(violinCells(combos, detail, (c, j) => values(c).values[j])), values,
     refElem: refMark ? refX : null, elemLabel: (x) => d.ids[x], onPick: noop, profileAll,
-    groupAgg: () => ({ mass: 0, contributors: 0, rows: 0 }), query: null, selected: selKey, focusMode: false, reference: refMark,
+    groupAgg: () => ({ mass: 0, contributors: 0, rows: 0 }), query: null, selected: selKey, pinned: new Set(), onPin: noop, focusMode: false, reference: refMark,
     onSelect: noop, onToggleGroup: noop, tip: noop, onLeave: noop, headHists: K.map(() => [0, 0, 0, 0, 0]), headMax: 1, headTip: () => [],
     onHeaderDown: noop, headRef: { current: null }, dropActive: false, snapshots: [], onRemoveSnapshot: noop,
     rank: { epoch: 0, delta: new Map() }, ranking: combos.map((c) => c.key),

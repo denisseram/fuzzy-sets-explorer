@@ -36,6 +36,8 @@ const HEAD = 84, TOP_Y = 34, LOW_Y = 76;
 const QUERY_H = 26;
 /** Room right of the matrix for the reference label and group labels. */
 const LABEL_W = 210;
+/** The pin toggle right of the last column (rows that are not pattern rows); labels there start after it. */
+const PIN_W = 20;
 /** Snapshots: slope band + a column of mini glyphs (one dot per selected set). */
 const SLOPE_W = 44, SNAP_DOT = 5;
 /** Group header row height. */
@@ -249,6 +251,9 @@ export type MatrixProps = {
   groupAgg: (g: Group) => Agg;
   query: { text: string; agg: Agg; matches: ReadonlySet<string> } | null;
   selected: string | null;
+  /** Rows kept at Full height in any level-of-detail setting, to compare their distributions; the pin toggles one. */
+  pinned: ReadonlySet<string>;
+  onPin: (key: string) => void;
   /** Rows outside the neighbourhood are stubs: do not dim the others. */
   focusMode: boolean;
   reference: RefMark | null;
@@ -314,10 +319,14 @@ function UpsetMatrix(p: MatrixProps) {
   const avail = Math.max(120, vp.h - headTotal - 4);
   const hH0 = headerH(ROW_FULL);
   const focus = p.fisheye ? (hoverId ?? p.entries.find((e) => e.kind === "row" && e.combo.key === selected)?.id ?? null) : null;
-  // Auto: the selected row, open rows with their pattern rows and the fish-eye focus rows are always Full; the others
-  // take the largest level that fits (open rows do not take height from them)
-  const baseFull = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus) : new Set<string>()), [p.lod, p.entries, selected, focus]);
-  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, p.open) : baseFull), [p.lod, p.entries, selected, focus, p.open, baseFull]);
+  // Auto: the selected and pinned rows, open rows with their pattern rows and the fish-eye focus rows are always Full;
+  // the others take the largest level that fits (open rows do not take height from them). Compact and Minimal: pinned
+  // rows are Full.
+  const baseFull = useMemo(
+    () => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, undefined, p.pinned) : p.lod === "full" ? new Set<string>() : autoFullRows(p.entries, null, null, undefined, p.pinned)),
+    [p.lod, p.entries, selected, focus, p.pinned],
+  );
+  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, p.open, p.pinned) : baseFull), [p.lod, p.entries, selected, focus, p.open, p.pinned, baseFull]);
   const rowH = autoRowHeight(p.lod, p.entries, avail - counts.headers * hH0 - counts.stubs * 5, baseFull);
   const hH = headerH(rowH);
   const lay = useMemo(
@@ -397,7 +406,8 @@ function UpsetMatrix(p: MatrixProps) {
     const pat: PatternRow | null = isPatternRow(c) ? c : null;
     const owner = pat ? pat.parent : c.key;
     const isSel = selected === owner;
-    const dim = selected && !isSel && !p.focusMode ? 0.45 : 1;
+    const isPin = p.pinned.has(owner);
+    const dim = selected && !isSel && !isPin && !p.focusMode ? 0.45 : 1;
     const bg = isSel && !pat ? "var(--accent-bg)" : "var(--panel)";
     const name = rowName(c.sets);
     const cxs = cols.flatMap((s, ci) => (c.sets.includes(s) ? [colX(ci) + CIRCLE_X] : []));
@@ -423,7 +433,7 @@ function UpsetMatrix(p: MatrixProps) {
     return (
       <Moving
         key={it.id} id={it.id} y={it.y} prev={prevY} animate={animate} epoch={p.rank.epoch} delta={p.rank.delta.get(c.key) ?? 0} width={colX(k)} h={h}
-        className={pat ? "fu-row fu-row-pat" : "fu-row"} onClick={() => p.onSelect(owner)} aria-label={pat ? `${name}: ${pat.pattern.label}` : name}
+        className={pat ? "fu-row fu-row-pat" : "fu-row"} onClick={(ev) => (ev.shiftKey ? p.onPin(owner) : p.onSelect(owner))} aria-label={pat ? `${name}: ${pat.pattern.label}` : name}
         style={pat ? ({ "--row-c": pat.pattern.color } as React.CSSProperties) : undefined}
         onMouseEnter={p.fisheye ? () => (clearTimeout(hoverTimer.current), (hoverTimer.current = window.setTimeout(() => setHoverId(it.id), 150))) : undefined}
       >
@@ -432,6 +442,17 @@ function UpsetMatrix(p: MatrixProps) {
         {h >= 9 && <line x1={PAD} x2={colX(k)} y1={h} y2={h} stroke="var(--rule-2)" />}
         {pat && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--row-c)" />}
         {!pat && p.query?.matches.has(c.key) && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--accent)" />}
+        {!pat && (
+          <g
+            className={`fu-pin${isPin ? " on" : ""}`} role="button" aria-pressed={isPin} aria-label={`${isPin ? "Unpin" : "Pin"} ${name}`}
+            transform={`translate(${colX(k) + 2},${cy - 7})`} onClick={(ev) => (ev.stopPropagation(), p.onPin(owner))}
+            onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, name, [isPin ? "click: unpin" : "click: pin (keep its points and violins visible with other pinned rows)", "Shift-click a row: pin or unpin it"]))}
+          >
+            <rect x={0} y={0} width={14} height={14} fill="transparent" />
+            <path d="M4.5 1.5h5l-.6 4 2.1 2.2H3l2.1-2.2z" />
+            <line x1={7} y1={7.7} x2={7} y2={12.5} />
+          </g>
+        )}
         {canOpen && (
           <g
             className="fu-tg" role="button" aria-expanded={p.open.has(c.key)} aria-label={`${p.open.has(c.key) ? "Close" : "Open"} the patterns of ${name}`}
@@ -478,7 +499,7 @@ function UpsetMatrix(p: MatrixProps) {
             );
           })}
         </g>
-        {isSel && !pat && reference && lod === "compact" && <text className="fu-ref-lbl" x={colX(k) + 4} y={cy + 3.5}>{reference.label}</text>}
+        {isSel && !pat && reference && lod === "compact" && <text className="fu-ref-lbl" x={colX(k) + PIN_W} y={cy + 3.5}>{reference.label}</text>}
         {pat && lod !== "minimal" && (
           <text className="fu-pat-lbl" x={colX(k) + 4} y={cy + 3.5}>{`${sub ? "↳ " : ""}${pat.pattern.label} — ${n.toLocaleString("en-US")} (${share})`}</text>
         )}
@@ -657,7 +678,7 @@ function UpsetMatrix(p: MatrixProps) {
             <circle key={`r${q.s}`} cx={colX(q.ci) + pointDx(ref)} cy={yOf(refV(q.j))} r={PT_R_REF} className="fu-pt-ref" data-x={ref} data-s={q.s} data-v={refV(q.j)} />
           ))}
         </g>
-        {isSel && !pat && reference && ref !== null && <text className="fu-ref-lbl" x={colX(k) + 4} y={yOf(refMin) + 3.5}>{reference.label}</text>}
+        {isSel && !pat && reference && ref !== null && <text className="fu-ref-lbl" x={colX(k) + PIN_W} y={yOf(refMin) + 3.5}>{reference.label}</text>}
       </g>
     );
   };

@@ -111,6 +111,7 @@
 .fs-field .seg-col button { text-align: left; border-right: 0; border-bottom: 1px solid var(--rule-2); }
 .fs-field .seg-col button:last-child { border-bottom: 0; }
 .fs-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.fs-pins { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--ink-2); }
 .fs-ref { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .fs-ref .fu-ref { flex: 1 1 auto; min-width: 0; }
 @media (max-width: 900px) {
@@ -162,6 +163,14 @@
 .fu-pt { fill: var(--accent); fill-opacity: .55; stroke: transparent; stroke-width: 2; cursor: pointer; }
 .fu-pt:hover { fill-opacity: 1; }
 .fu-pt-ref { fill: var(--select); stroke: var(--panel); stroke-width: 1; cursor: pointer; }
+/* pin toggle right of the last column: shown on hover, always when pinned */
+.fu-pin { cursor: pointer; opacity: 0; }
+.fu-row:hover .fu-pin { opacity: .55; }
+.fu-pin:hover, .fu-row:hover .fu-pin:hover, .fu-pin.on { opacity: 1; }
+.fu-pin path { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1.1; stroke-linejoin: round; }
+.fu-pin line { stroke: var(--ink-3); stroke-width: 1.3; stroke-linecap: round; }
+.fu-pin.on path { fill: var(--accent); stroke: var(--accent); }
+.fu-pin.on line { stroke: var(--accent); }
 /* joint patterns: the ▸ toggle, pattern rows in their colour (--row-c), ribbons between set axes */
 .fu-tg { cursor: pointer; }
 .fu-tg text { font-size: 11px; fill: var(--ink-3); }

@@ -73,6 +73,8 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [beta, setBeta] = useState(0.5);
   const [share, setShare] = useState(0.2);
   const [selected, setSelected] = useState<string | null>(null);
+  // rows kept at Full height together (points and violins), to compare their distributions
+  const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());
   const [refX, setRefX] = useState<number | null>(null);
   const [refText, setRefText] = useState("");
   const [profileAll, setProfileAll] = useState(false);
@@ -317,6 +319,11 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const tip = useCallback((ev: React.MouseEvent, title: string, lines: string[]) => setHover({ x: ev.clientX, y: ev.clientY, title, rows: lines }), []);
   const onLeave = useCallback(() => setHover(null), []);
   const onSelect = useCallback((key: string) => setSelected((s) => (s === key ? null : key)), []);
+  const onPin = useCallback((key: string) => setPinned((s) => {
+    const n = new Set(s);
+    if (!n.delete(key)) n.add(key);
+    return n;
+  }), []);
   const onToggleGroup = useCallback((id: string) => setCollapsed((c) => {
     const n = new Set(c);
     if (n.has(id)) n.delete(id);
@@ -360,7 +367,8 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const shelf = names.map((_, i) => i).filter((i) => !K.includes(i));
   const filterBadge = [degLo !== null || degHi !== null, minMass > 0, minContrib > 1, withEmpty].filter(Boolean).length;
   // shown on the collapsed options panel: how many options change the rows or their marks
-  const activeCount = [thActive, filterBadge > 0, activeClauses.length > 0, openShown > 0, snapshots.length > 0, !!refText, hop > 0 && !!selCombo]
+  const pinnedShown = sorted.filter((c) => pinned.has(c.key)).length;
+  const activeCount = [thActive, filterBadge > 0, pinnedShown > 0, activeClauses.length > 0, openShown > 0, snapshots.length > 0, !!refText, hop > 0 && !!selCombo]
     .filter(Boolean).length;
 
   return (
@@ -419,6 +427,14 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
                 <label className="fc-check" title="When rows overflow: the hovered or selected row and 3 neighbours on each side get full height">
                   <input type="checkbox" checked={fisheye} onChange={(e) => setFisheye(e.target.checked)} /> Fish-eye
                 </label>
+                <div className="fs-field" title="Pinned rows stay Full (points and violins) in every Rows setting, so several distributions can be compared at once">
+                  <span className="fc-lbl">Pinned rows</span>
+                  <div className="fs-pins">
+                    <span>{pinnedShown ? `${pinnedShown} pinned` : "none"}</span>
+                    {pinned.size > 0 && <button className="fu-link" onClick={() => setPinned(new Set())}>Unpin all</button>}
+                  </div>
+                  <p className="fp-hint">Pin rows with the pin at their right end (or Shift-click) to see their violins together.</p>
+                </div>
               </section>
               <section className="fs-group">
                 <p className="fs-title">Select rows</p>
@@ -561,7 +577,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
             names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} fisheye={fisheye}
             N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} violinMax={violinMax} detail={detail} groupAgg={groupAgg} query={query}
             values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll} open={open} onToggleOpen={onToggleOpen}
-            selected={selected} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}
+            selected={selected} pinned={pinned} onPin={onPin} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}
             headHists={headHists} headMax={setHistMax} headTip={headTip} onHeaderDown={onHeaderDown} headRef={headRef}
             dropActive={!!drag?.moved && drag.kind === "add"} snapshots={snapshots} onRemoveSnapshot={onRemoveSnapshot} rank={rankView} ranking={ranking}
           />

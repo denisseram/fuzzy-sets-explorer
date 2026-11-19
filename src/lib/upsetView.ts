@@ -151,16 +151,18 @@ export function rowHeight(setting: LodSetting, n: number, avail: number, nFull =
 const isOpenRow = (e: Extract<Entry, { kind: "row" }>, open: ReadonlySet<string>) => e.parent !== undefined || open.has(e.combo.key);
 
 /**
- * Ids of the shown rows that Auto keeps at Full height: every entry of the selected row (rows repeat across groups)
- * and its pattern rows; every row opened into pattern rows and its pattern rows (so their distributions stay visible);
- * and, with a fish-eye focus, the focus and `radius` shown rows on each side.
+ * Ids of the shown rows that Auto keeps at Full height: every entry of the selected row and of each pinned row (rows
+ * repeat across groups) with their pattern rows; every row opened into pattern rows and its pattern rows (so their
+ * distributions stay visible); and, with a fish-eye focus, the focus and `radius` shown rows on each side.
  */
 export function autoFullRows(
-  entries: readonly Entry[], selected: string | null, focus: string | null, open: ReadonlySet<string> = new Set(), radius = FISHEYE_RADIUS,
+  entries: readonly Entry[], selected: string | null, focus: string | null, open: ReadonlySet<string> = new Set(),
+  pinned: ReadonlySet<string> = new Set(), radius = FISHEYE_RADIUS,
 ): Set<string> {
   const out = new Set<string>();
   const shown = entries.filter((e): e is Extract<Entry, { kind: "row" }> => e.kind === "row" && !e.hidden);
-  for (const e of shown) if ((selected !== null && (e.combo.key === selected || e.parent === selected)) || isOpenRow(e, open)) out.add(e.id);
+  const keep = (k: string | undefined) => k !== undefined && (k === selected || pinned.has(k));
+  for (const e of shown) if (keep(e.combo.key) || keep(e.parent) || isOpenRow(e, open)) out.add(e.id);
   const f = focus === null ? -1 : shown.findIndex((e) => e.id === focus);
   if (f >= 0) for (const e of shown.slice(Math.max(0, f - radius), f + radius + 1)) out.add(e.id);
   return out;
