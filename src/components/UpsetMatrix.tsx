@@ -3,7 +3,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type React
 import { binLabel, BIN_EDGES, N_BINS, tauOf, type Combo, type Mode, type RowDetail, type RowValues, type Threshold } from "../lib/fuzzyDecomposition";
 import { holeRadius } from "../lib/fuzzyUpset";
 import {
-  autoFullRows, countEntries, horizon, layout, lodOf, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
+  autoFullRows, countEntries, horizon, layout, lodOf, MAX_WRAPS, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
 } from "../lib/upsetView";
 import { indexOfSorted, jitter, MAX_POINTS, pointsToDraw, profilePath, VIOLIN_STEPS, violinOf } from "../lib/violin";
 import { isPatternRow, PATTERN_COUNT_MIN, ribbonGeometry, ribbonsOf, type PatternRow } from "../lib/patterns";
@@ -112,9 +112,50 @@ function VStrip({ x, y, h, counts, maxC, ring = false, color = "var(--ink)" }: {
 /** Upper edge of display bin b. */
 const binTop = (b: number) => (b === N_BINS - 1 ? 1 : BIN_EDGES[b + 1]);
 
+/** Hatch of wrap t (1: 45°, 2: 135°, 3: both), dark lines on the light contributors bar, light lines on the mass bar. */
+const hatchOf = (kind: "count" | "mass", t: number) => `url(#fu-hatch-${kind === "count" ? "dark" : "light"}-${t === 1 ? "a" : t === 2 ? "b" : "x"})`;
+
+/** The hatch patterns of the wrap layers (in the header SVG; ids are document-wide, like the arrow marker). */
+function HatchDefs() {
+  return (
+    <>
+      {(["dark", "light"] as const).map((tone) => (
+        <g key={tone}>
+          {([["a", 45], ["b", -45]] as const).map(([d, a]) => (
+            <pattern key={d} id={`fu-hatch-${tone}-${d}`} className={`fu-hatch-${tone}`} width={4} height={4} patternUnits="userSpaceOnUse" patternTransform={`rotate(${a})`}>
+              <line x1={0} y1={0} x2={0} y2={4} />
+            </pattern>
+          ))}
+          {/* cross-hatch: both directions in one tile */}
+          <pattern id={`fu-hatch-${tone}-x`} className={`fu-hatch-${tone}`} width={4} height={4} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1={0} y1={0} x2={0} y2={4} />
+            <line x1={0} y1={0} x2={4} y2={0} />
+          </pattern>
+        </g>
+      ))}
+    </>
+  );
+}
+
+/** "longer than the range (500): contributors 3 × range + 120, mass 1 × range + 40" (null when nothing wraps). */
+function wrapLine(count: number, mass: number, range: number): string | null {
+  const part = (name: string, v: number, f: (x: number) => string) => {
+    const hz = horizon(v, range);
+    if (!hz.wraps) return null;
+    return hz.broken ? `${name} more than ${MAX_WRAPS + 1} × range` : `${name} ${hz.wraps} × range + ${f(hz.remainder)}`;
+  };
+  const parts = [part("contributors", count, (x) => String(Math.round(x))), part("mass", mass, (x) => x.toFixed(2))].filter(Boolean);
+  return parts.length ? `longer than the range (${range}): ${parts.join(", ")}` : null;
+}
+const wrapLines = (count: number, mass: number, range: number) => {
+  const w = wrapLine(count, mass, range);
+  return w ? [w] : [];
+};
+
 /**
- * A count or mass bar on the adjustable axis, growing leftward from `right`. Beyond the range it wraps: each wrap is
- * drawn narrower and darker over the previous layer; beyond 3 wraps a break symbol.
+ * A count or mass bar on the adjustable axis, growing leftward from `right`. Beyond the range it wraps (UpSet's horizon
+ * bars): each wrap is drawn narrower over the previous layer in the same colour, marked by a hatch (45°, 135°, both),
+ * so colour keeps meaning the measure; beyond 3 wraps a break symbol.
  */
 function HBar({ v, range, right, cy, h, kind }: { v: number; range: number; right: number; cy: number; h: number; kind: "count" | "mass" }) {
   if (!(v > 0)) return null;
@@ -124,12 +165,13 @@ function HBar({ v, range, right, cy, h, kind }: { v: number; range: number; righ
   for (let t = 0; t <= hz.wraps; t++) {
     const len = t < hz.wraps ? range : hz.remainder;
     const hh = Math.max(1.5, h * (1 - 0.24 * t));
+    const geo = { x: right - px(len), y: cy - hh / 2, width: px(len), height: hh, rx: t ? 1 : 2 };
     layers.push(
-      <rect
-        key={t} x={right - px(len)} y={cy - hh / 2} width={px(len)} height={hh} rx={t ? 1 : 2}
-        className={kind === "count" ? "fu-bar fu-bar-out" : "fu-bar fu-bar-in"}
-        style={t ? (kind === "count" ? { fillOpacity: 0.15 + 0.2 * t } : { fill: `color-mix(in srgb, var(--accent) ${100 - 25 * t}%, black)` }) : undefined}
-      />,
+      <g key={t}>
+        {/* a wrap of the light bar has no fill of its own (stacked tints would darken it): outline + hatch */}
+        <rect {...geo} className={kind === "count" ? "fu-bar fu-bar-out" : "fu-bar fu-bar-in"} style={t && kind === "count" ? { fillOpacity: 0 } : undefined} />
+        {t > 0 && <rect {...geo} className="fu-bar fu-bar-wrap" fill={hatchOf(kind, t)} pointerEvents="none" />}
+      </g>,
     );
   }
   return (
@@ -364,10 +406,12 @@ function UpsetMatrix(p: MatrixProps) {
       modeName,
       `contributors: ${n} of ${pat.parentCount} (${share}${sub ? " of the group" : ""})`,
       `membership mass: ${fmt(c.mass)}${n ? ` (mean ${fmt(c.mass / n)} per contributor)` : ""}`,
+      ...wrapLines(n, c.mass, range),
     ] : [
       modeName,
       `contributors: ${n}`,
       `membership mass: ${fmt(c.mass)}${n ? ` (mean ${fmt(c.mass / n)} per contributor)` : ""}`,
+      ...wrapLines(n, c.mass, range),
       ...p.snapshots.map((s) => {
         const sr = s.rows.get(c.key);
         return `${s.label}: ${sr ? `rank ${sr.rank + 1}, mass ${fmt(sr.mass)}` : "not in snapshot"}`;
@@ -622,7 +666,7 @@ function UpsetMatrix(p: MatrixProps) {
       <g
         key={it.id} transform={`translate(0,${it.y})`} className="fu-group" role="button" aria-expanded={!it.collapsed} aria-label={g.label}
         onClick={() => p.onToggleGroup(g.id)}
-        onMouseMove={(ev) => tip(ev, g.label, [`${plural(a.rows, "row")}${it.collapsed ? " (collapsed)" : ""}`, `contributors: ${a.contributors} distinct`, `membership mass: ${fmt(a.mass)} — ${overlap}`])}
+        onMouseMove={(ev) => tip(ev, g.label, [`${plural(a.rows, "row")}${it.collapsed ? " (collapsed)" : ""}`, `contributors: ${a.contributors} distinct`, `membership mass: ${fmt(a.mass)} — ${overlap}`, ...wrapLines(a.contributors, a.mass, range)])}
       >
         <rect x={PAD - 6} y={0.5} width={W - PAD + 6 - 4} height={h - 1} className="fu-group-bg" />
         {/* toggle and label at the left (always in view); the summary bar along the bottom of the header */}
@@ -697,6 +741,7 @@ function UpsetMatrix(p: MatrixProps) {
         <div className={`fu-head${p.dropActive ? " fu-drop" : ""}`} ref={p.headRef} style={{ width: W }}>
           <svg width={W} height={headTotal} role="img" aria-label={`Fuzzy UpSet header: ${cols.map((i) => names[i]).join(", ")}`}>
             <defs>
+              <HatchDefs />
               <marker id="fu-arrow" viewBox="0 0 6 6" refX={5} refY={3} markerWidth={5} markerHeight={5} orient="auto-start-reverse">
                 <path d="M0,0L6,3L0,6z" fill="var(--ink-3)" />
               </marker>
@@ -706,6 +751,13 @@ function UpsetMatrix(p: MatrixProps) {
               <text x={PAD + 19} y={12}>contributors</text>
               <rect x={PAD + 88} y={4} width={14} height={9} rx={2} className="fu-bar-in" />
               <text x={PAD + 107} y={12}>mass</text>
+              {range < Math.max(p.R, p.G ?? 0) && (
+                <g onMouseMove={(ev) => tip(ev, "Wrap: past the range", ["a bar longer than the range wraps: each further range is a narrower layer", "hatched 45°, then 135°, then both; beyond that two white slashes"])}>
+                  <rect x={PAD + 138} y={4} width={14} height={9} rx={2} className="fu-bar-out" />
+                  <rect x={PAD + 138} y={4} width={14} height={9} rx={2} fill={hatchOf("count", 1)} />
+                  <text x={PAD + 157} y={12}>wrap</text>
+                </g>
+              )}
             </g>
             {/* top axis: 0 to N; the shaded part is the lower axis's range */}
             <line x1={barR - BAR_W} x2={barR} y1={TOP_Y} y2={TOP_Y} className="fu-axis" />
@@ -760,7 +812,7 @@ function UpsetMatrix(p: MatrixProps) {
               <g
                 transform={`translate(0,${HEAD})`}
                 onMouseMove={(ev) => tip(ev, `Query: ${p.query!.text}`, p.query!.agg.rows
-                  ? [`${plural(p.query!.agg.rows, "combination")} match`, `contributors: ${p.query!.agg.contributors} distinct`, `membership mass: ${fmt(p.query!.agg.mass)} — ${mode === "inclusive" ? "sum of row masses (rows overlap)" : "sum of row masses"}`]
+                  ? [`${plural(p.query!.agg.rows, "combination")} match`, `contributors: ${p.query!.agg.contributors} distinct`, `membership mass: ${fmt(p.query!.agg.mass)} — ${mode === "inclusive" ? "sum of row masses (rows overlap)" : "sum of row masses"}`, ...wrapLines(p.query!.agg.contributors, p.query!.agg.mass, range)]
                   : ["no combination matches"])}
               >
                 <rect x={PAD - 6} y={1} width={W - PAD + 6 - 4} height={QUERY_H - 3} className="fu-query-bg" />

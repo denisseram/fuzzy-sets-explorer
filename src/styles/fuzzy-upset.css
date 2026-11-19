@@ -149,6 +149,9 @@
 .fu-bar { transition: x .25s ease, width .25s ease; }
 .fu-bar-out { fill: var(--accent); fill-opacity: .1; stroke: var(--accent); stroke-width: 1; }
 .fu-bar-in { fill: var(--accent); }
+/* wraps past the range (horizon bars): a hatch over the layer, never a darker colour */
+.fu-hatch-dark line { stroke: var(--ink); stroke-opacity: .45; stroke-width: 1; }
+.fu-hatch-light line { stroke: var(--panel); stroke-width: 1; }
 .fu-set { font-family: "Poppins", system-ui, sans-serif; font-size: 11px; font-weight: 500; fill: var(--ink); }
 .fu-ref-lbl { font-family: "Poppins", system-ui, sans-serif; font-size: 10.5px; fill: var(--select); font-weight: 500; }
 

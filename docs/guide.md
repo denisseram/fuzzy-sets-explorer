@@ -266,6 +266,8 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
   Count groups (4+ sets): #c2541f mixed with the panel from 35 % (no high set) to 100 % (all high).
   Ribbons: navy at 18 % in rows, the pattern colour at 35 % in pattern rows. Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
   Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference profile, line, band, label and τ marks.
+- Horizon wraps (bars past the range): the measure's colour plus a hatch (ink lines at 45 % on the light bar, white
+  lines on the solid bar), never a darker colour.
 - Compact strips: ink at opacity 0.1 + 0.85 · count / max (grayscale on the shared count scale).
 - Rank changes: green #2E8540 (moved up), red #B91C1C (moved down); stubs #D5D7DD.
 - Rows: Full 86 px (Auto: 80–86; plot area 56 px over a 24 px circle strip), Compact 24 px (Auto: 12–79), Minimal
@@ -357,9 +359,13 @@ count scale); **Minimal** (< 12 px) circles and connector only. The reference be
 
 Above the bars, a top axis 0–N with labels **R** (largest row), **G** (largest group, when grouped) and **U** (N).
 Clicking a label, or dragging along the top axis, sets the range of the lower axis used by the bars (shaded on the top
-axis). A bar longer than the range wraps around: each wrap is drawn narrower (−24 % height) and darker over the
-previous one, up to 3 wraps; beyond that a break symbol (two white slashes) marks the bar. Count and mass bars wrap
-independently.
+axis). A bar longer than the range wraps around (UpSet's horizon bars): each further range is drawn over the previous
+layer, narrower (−24 % height), in the **same colour** as its measure and marked by a **hatch**: 45° for the first
+wrap, 135° for the second, both for the third. The colour keeps meaning the measure (light = contributors, solid =
+mass); the texture means "past the range" (dark lines on the light bar, white lines on the solid bar). Beyond 3 wraps
+a break symbol (two white slashes) marks the bar. Count and mass bars wrap independently. While the range is shorter
+than the largest row, the legend shows a hatched swatch "wrap", and bar tooltips add, e.g., "longer than the
+range (400): contributors 3 × range + 120, mass 1 × range + 40".
 
 ### 11.7 Fish-eye
 
