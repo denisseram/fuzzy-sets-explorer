@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  additiveCombos, inclusiveCombos, rowValues, validateMemberships, type Memberships,
+  additiveCombos, binOf, inclusiveCombos, N_BINS, rowDetail, rowValues, validateMemberships, type Memberships,
 } from "./fuzzyDecomposition";
 import { pickReference } from "./upsetView";
 import {
-  bezierAt, indexOfSorted, integrate, jitter, MAX_POINTS, pointsToDraw, priority, profilePath, profileSegments, violin, violinDirect, VIOLIN_STEPS, VIOLIN_UNIT,
+  bezierAt, indexOfSorted, integrate, jitter, MAX_POINTS, pointsToDraw, priority, profilePath, profileSegments, violin, violinBound, violinCells, violinDirect, violinMaxOf, violinOf, VIOLIN_STEPS, VIOLIN_UNIT,
 } from "./violin";
 
 const A = 0, B = 1, C = 2;
@@ -196,5 +196,36 @@ describe("element profile (fixture)", () => {
     const few = renderMatrix(data(rows.slice(0, 150)), ["A", "B"], "inclusive", "0,1", 12);
     // rows A and B (Full, 150 points each) and A ∩ B (2 × 149 points plus the reference element's 2)
     expect(few.match(/class="fu-pt"/g)).toHaveLength(150 + 150 + 2 * 149);
+  });
+});
+
+describe("shared violin scale (all rows, not the rows on screen)", () => {
+  const histOf = (v: ArrayLike<number>) => {
+    const h = new Array(N_BINS).fill(0);
+    for (let k = 0; k < v.length; k++) h[binOf(v[k])]++;
+    return h;
+  };
+  const gen: (() => number)[] = [rnd, () => 0, () => 1, () => 0.4 + 0.01 * rnd(), () => (rnd() < 0.5 ? 0.19 : 0.21), () => (rnd() < 0.5 ? 0.02 * rnd() : 1 - 0.02 * rnd())];
+  const cells = Array.from({ length: 60 }, (_, i) => {
+    const n = 1 + Math.floor(rnd() * 300);
+    return Float64Array.from({ length: n }, gen[i % gen.length]);
+  });
+  it("the histogram bound is never below the exact max f", () => {
+    for (const v of cells) expect(violinBound(histOf(v))).toBeGreaterThanOrEqual(violinOf(v).max);
+  });
+  it("equals the largest max f over every cell, and smooths only the cells it needs", () => {
+    let fetched = 0;
+    const got = violinMaxOf(cells.map((v) => ({ hist: histOf(v), values: () => (fetched++, v) })));
+    expect(got).toBe(Math.max(...cells.map((v) => violinOf(v).max)));
+    expect(fetched).toBeLessThan(cells.length);
+    expect(violinMaxOf([])).toBe(0);
+  });
+  it("fixture: member and ring cells of every row; independent of which rows are drawn", () => {
+    for (const combos of [inclusiveCombos(fx, K3).combos, additiveCombos(fx, K3)]) {
+      const detail = (c: (typeof combos)[number]) => rowDetail(fx, c.sets, c.contributors, K3, null);
+      const values = (c: (typeof combos)[number]) => rowValues(fx, c.sets, c.contributors);
+      const all = combos.flatMap((c) => values(c).values.map((v) => violinOf(v).max));
+      expect(violinMaxOf(violinCells(combos, detail, (c, j) => values(c).values[j]))).toBeCloseTo(Math.max(...all), 12);
+    }
   });
 });

@@ -178,6 +178,13 @@ export function pickReference(cur: { selected: string | null; refX: number | nul
 export const MAX_WRAPS = 3;
 
 /**
+ * Default range of the bars: the largest single-set count (the largest inclusive row; fixed across modes), widened to
+ * the largest group (distinct contributors) and the query, so no bar wraps by default. Null: no groups / no query.
+ */
+export const defaultBarRange = (maxSingle: number, groupMax: number | null, queryCount: number | null) =>
+  Math.max(1, maxSingle, groupMax ?? 0, queryCount ?? 0);
+
+/**
  * A bar of length `v` on an axis of length `range`: if it exceeds the range it wraps around; each wrap is drawn over
  * the previous one (narrower, darker). `wraps` full-range layers lie under the last one, whose length is `remainder`.
  * Beyond MAX_WRAPS wraps, the bar is `broken` (break symbol) and the last layer is drawn full.

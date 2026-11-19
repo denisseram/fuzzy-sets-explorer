@@ -6,11 +6,12 @@ import {
   type Combo, type Issue, type Memberships, type Mode, type RowDetail, type RowValues, type Threshold,
 } from "../lib/fuzzyDecomposition";
 import {
-  applyFilters, describeClause, describeQuery, displayEntries, groupRows, neighbourhood, pickReference, queryMatches, rankChanges, referenceLabel, sortRows,
+  applyFilters, defaultBarRange, describeClause, describeQuery, displayEntries, groupRows, neighbourhood, pickReference, queryMatches, rankChanges, referenceLabel, sortRows,
   type Clause, type Group, type GroupBy, type LodSetting, type QState, type SortBy,
 } from "../lib/upsetView";
 import { isPatternRow, PATTERN_CUT, PATTERN_EPS, PATTERN_OPEN_ALL_MAX, patternChildren, patternRows, type PatternRow } from "../lib/patterns";
 import { tipStyle } from "../lib/tip";
+import { violinCells, violinMaxOf } from "../lib/violin";
 import MiniHist from "./MiniHist";
 import Popover from "./Popover";
 import ThresholdSidebar from "./ThresholdSidebar";
@@ -152,6 +153,12 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
     if (!v) valuesCache.set(c.key, (v = rowValues(data, c.sets, c.contributors)));
     return v;
   }, [valuesCache, data]);
+  // one width scale for every half violin: the largest f over all filtered rows (not only the rows on screen)
+  // (rows not drawn at Full detail are read one set at a time and not kept)
+  const violinMax = useMemo(
+    () => violinMaxOf(violinCells(sorted, detail, (c, j) => valuesCache.get(c.key)?.values[j] ?? rowValues(data, [c.sets[j]], c.contributors).values[0])),
+    [sorted, detail, valuesCache, data],
+  );
 
   // queries (clauses on deselected sets are ignored)
   const activeClauses = useMemo(
@@ -215,8 +222,10 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   useEffect(() => { rankRef.current = rank; }, [rank]);
   const rankView = useMemo(() => ({ epoch: rank.epoch, delta: rank.delta }), [rank.epoch, rank.delta]);
 
-  // the bar scale: default range = the largest inclusive row (fixed across modes)
-  const defaultRange = useMemo(() => Math.max(1, maxRowCount(data, K, threshold)), [data, K, cutKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the bar scale: default range = the largest inclusive row (fixed across modes), widened to the largest group and the
+  // query, so no bar wraps until the user sets a smaller range
+  const maxSingle = useMemo(() => maxRowCount(data, K, threshold), [data, K, cutKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const defaultRange = defaultBarRange(maxSingle, G, query?.agg.contributors ?? null);
   const range = rangeSel ?? defaultRange;
   const R = useMemo(() => Math.max(0, ...sorted.map((c) => c.contributors.length)), [sorted]);
 
@@ -512,7 +521,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
           </div>
           <UpsetMatrix
             names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} fisheye={fisheye}
-            N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} detail={detail} groupAgg={groupAgg} query={query}
+            N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} violinMax={violinMax} detail={detail} groupAgg={groupAgg} query={query}
             values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll} open={open} onToggleOpen={onToggleOpen}
             selected={selected} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}
             headHists={headHists} headMax={setHistMax} headTip={headTip} onHeaderDown={onHeaderDown} headRef={headRef}

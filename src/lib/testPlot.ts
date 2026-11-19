@@ -5,6 +5,7 @@ import UpsetMatrix, { type MatrixProps, type RefMark } from "../components/Upset
 import { additiveCombos, inclusiveCombos, maxBinOf, reference, rowDetail, rowValues, type Memberships, type Mode } from "./fuzzyDecomposition";
 import { patternRows } from "./patterns";
 import { displayEntries, referenceLabel } from "./upsetView";
+import { violinCells, violinMaxOf } from "./violin";
 
 const noop = () => {};
 export function renderMatrix(d: Memberships, names: string[], mode: Mode, selKey: string | null, refX: number | null, profileAll = false, open: ReadonlySet<string> = new Set(), range = d.N) {
@@ -12,6 +13,7 @@ export function renderMatrix(d: Memberships, names: string[], mode: Mode, selKey
   const combos = mode === "inclusive" ? inclusiveCombos(d, K).combos : additiveCombos(d, K);
   const detail = (c: (typeof combos)[number]) => rowDetail(d, c.sets, c.contributors, K, null);
   const valCache = new Map<string, ReturnType<typeof rowValues>>();
+  const values = (c: (typeof combos)[number]) => valCache.get(c.key) ?? (valCache.set(c.key, rowValues(d, c.sets, c.contributors)), valCache.get(c.key)!);
   const sel = combos.find((c) => c.key === selKey);
   let refMark: RefMark | null = null;
   if (sel && refX !== null && sel.contributors.includes(refX)) {
@@ -25,7 +27,7 @@ export function renderMatrix(d: Memberships, names: string[], mode: Mode, selKey
     names, cols: K, mode, threshold: null, lod: "auto", fisheye: false, open, onToggleOpen: noop,
     entries: displayEntries(combos, null, new Set(), null, { open, of: (c) => patternRows(d, c, K, null, mode, { names, cols: K }) }),
     N: d.N, range, R: Math.max(...combos.map((c) => c.contributors.length)), G: null, onRange: noop, maxBin: Math.max(1, maxBinOf(combos.map(detail))), detail,
-    values: (c) => valCache.get(c.key) ?? (valCache.set(c.key, rowValues(d, c.sets, c.contributors)), valCache.get(c.key)!),
+    violinMax: violinMaxOf(violinCells(combos, detail, (c, j) => values(c).values[j])), values,
     refElem: refMark ? refX : null, elemLabel: (x) => d.ids[x], onPick: noop, profileAll,
     groupAgg: () => ({ mass: 0, contributors: 0, rows: 0 }), query: null, selected: selKey, focusMode: false, reference: refMark,
     onSelect: noop, onToggleGroup: noop, tip: noop, onLeave: noop, headHists: K.map(() => [0, 0, 0, 0, 0]), headMax: 1, headTip: () => [],

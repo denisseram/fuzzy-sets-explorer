@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateMemberships } from "./fuzzyDecomposition";
 import { renderMatrix } from "./testPlot";
+import { defaultBarRange, horizon } from "./upsetView";
 
 const FIXTURE = [["E1", 0.8, 0.7, 0.5], ["E2", 0.2, 0.9, 0.4], ["E3", 0.0, 0.0, 0.0], ["E4", 0.6, 0.6, 0.0]] as const;
 const fx = validateMemberships(FIXTURE.map((r) => r[0]), FIXTURE.flatMap((r) => r.slice(1) as number[]), 3).data;
@@ -37,5 +38,15 @@ describe("horizon wraps as texture", () => {
     const svg = renderMatrix(fx, ["A", "B", "C"], "inclusive", null, null);
     expect(svg).not.toMatch(/fill="url\(#fu-hatch/);
     expect(svg).not.toContain(">wrap</text>");
+  });
+});
+
+describe("default bar range: no bar wraps until the user sets a smaller range", () => {
+  it("covers the largest single set, the largest group and the query", () => {
+    expect(defaultBarRange(120, null, null)).toBe(120);
+    expect(defaultBarRange(120, 300, null)).toBe(300);
+    expect(defaultBarRange(120, 300, 450)).toBe(450);
+    expect(defaultBarRange(0, null, null)).toBe(1);
+    for (const v of [120, 300, 450]) expect(horizon(v, defaultBarRange(120, 300, 450)).wraps).toBe(0);
   });
 });

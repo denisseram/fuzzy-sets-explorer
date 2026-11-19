@@ -136,7 +136,9 @@ components, not thresholded values):
   with a Gaussian kernel K_h, h = 0.06, reflected at 0 and 1 so no mass leaves [0, 1], evaluated at y = 0, 0.02,
   …, 1. f reads as "elements per 0.2 of membership" (its integral over [0, 1] is 0.2 · n); it is not a probability
   density. The values are linearly binned at 0.01 first (within 0.4 % of the direct sum). One horizontal scale for
-  every violin on screen: the largest f over the visible Full cells is the full width.
+  every violin: the largest f over **all filtered rows** (member and ring cells) is the full width, so a row's violins
+  do not change when scrolling, with the fish-eye or when its level of detail changes. The cell tooltip states the
+  scale ("violin width 72 px = X elements per 0.2").
 - No contributors: only the axis.
 - The circles and the connector sit in a strip at the bottom of the row, under the axes, so they never overlap points
   or violins.
@@ -276,9 +278,9 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 
 ## 10. Caveats
 
-- **One count scale.** A row with many contributors sets the scale for all; violins of small rows can be almost
-  flat (MovieLens, additive mode). Hover a violin for exact counts. The scale follows the visible Full rows, so it
-  changes when scrolling.
+- **One count scale.** The row with the most contributors in a bin (among all filtered rows, on screen or not) sets
+  the scale for all; violins of small rows can be almost flat (MovieLens, additive mode). Hover a violin for exact
+  counts. The scale does not change when scrolling.
 - **Few points.** With a handful of contributors the violin is a sum of narrow bumps; read the points.
 - **Many tiny memberships.** Without a threshold any membership above 0 makes an element a contributor; with Tag
   Genome scores almost every movie contributes to every inclusive row. Threshold mode removes those.
@@ -351,20 +353,22 @@ that pass the filters.
 Auto (default) | Full | Compact | Minimal. Auto keeps the selected row and the fish-eye focus rows Full and gives the
 other rows the largest height (at most 86 px) at which all rows fit in the plot's visible height, never below 6 px;
 the level follows from the height: **Full** (≥ 80 px) points, half violins and profiles; **Compact** (12–79 px) a
-vertical strip of the 5 bins stacked bottom ([0, 0.2)) to top as grayscale cells (darker = more elements, shared
-count scale); **Minimal** (< 12 px) circles and connector only. The reference becomes a red tick across the strip
-(Compact) and is hidden (Minimal); rings stay rings. Only the rows near the visible part are drawn.
+vertical strip of the 5 bins stacked bottom ([0, 0.2)) to top as grayscale cells (darker = more elements; the
+darkest cell is the largest bin over all filtered rows, the same rows that set the violin scale); **Minimal**
+(< 12 px) circles and connector only. The reference becomes a red tick across the strip (Compact) and is hidden
+(Minimal); rings stay rings. Only the rows near the visible part are drawn.
 
 ### 11.6 Adjustable scale and horizon bars
 
 Above the bars, a top axis 0–N with labels **R** (largest row), **G** (largest group, when grouped) and **U** (N).
 Clicking a label, or dragging along the top axis, sets the range of the lower axis used by the bars (shaded on the top
-axis). A bar longer than the range wraps around (UpSet's horizon bars): each further range is drawn over the previous
+axis). The default range is the largest single-set count, widened to the largest group and the query result, so no bar
+wraps until the user sets a smaller range. A bar longer than the range wraps around (UpSet's horizon bars): each further range is drawn over the previous
 layer, narrower (−24 % height), in the **same colour** as its measure and marked by a **hatch**: 45° for the first
 wrap, 135° for the second, both for the third. The colour keeps meaning the measure (light = contributors, solid =
 mass); the texture means "past the range" (dark lines on the light bar, white lines on the solid bar). Beyond 3 wraps
 a break symbol (two white slashes) marks the bar. Count and mass bars wrap independently. While the range is shorter
-than the largest row, the legend shows a hatched swatch "wrap", and bar tooltips add, e.g., "longer than the
+than the largest row, group or query, the legend shows a hatched swatch "wrap", and bar tooltips add, e.g., "longer than the
 range (400): contributors 3 × range + 120, mass 1 × range + 40".
 
 ### 11.7 Fish-eye

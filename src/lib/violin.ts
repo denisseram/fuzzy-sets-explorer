@@ -1,6 +1,8 @@
 // Display geometry of the participating cells: half violins (smoothed counts), the jitter of the points, the element
 // profile curve and the points cap. Pure and tested; the values come from fuzzyDecomposition.rowValues.
 
+import type { RowDetail } from "./fuzzyDecomposition";
+
 /** Gaussian kernel bandwidth of the half violins (membership units). */
 export const VIOLIN_BANDWIDTH = 0.06;
 /** f is evaluated at y = 0, 0.02, …, 1. */
@@ -89,6 +91,60 @@ export function violinOf(values: ArrayLike<number> & object): { f: Float64Array;
     cache.set(values, (v = { f, max }));
   }
   return v;
+}
+
+/** One cell for the shared violin scale: its 5-bin histogram (0.2 wide) and, fetched only when needed, its values. */
+export type ViolinCell = { hist: readonly number[]; values: () => ArrayLike<number> & object };
+
+/**
+ * Per pair of display bins (y in bin b, value in bin a): the largest sum of the three kernel terms of one value,
+ * K_h(|y − v|) + K_h(y + v) + K_h(2 − y − v), from the smallest possible distances. The distances are reduced by 0.01
+ * because `violin` bins the values at 0.01.
+ */
+const PAIR_BOUND = (() => {
+  const lo = [0, 0.2, 0.4, 0.6, 0.8], hi = [0.2, 0.4, 0.6, 0.8, 1], e = 0.01;
+  const K = (d: number) => gauss(Math.max(0, d - e));
+  return lo.map((_, b) => lo.map((_, a) => K(Math.max(0, lo[a] - hi[b], lo[b] - hi[a])) + K(lo[a] + lo[b]) + K(2 - hi[a] - hi[b])));
+})();
+
+/** An upper bound of max f of a cell from its 5-bin histogram (`PAIR_BOUND` summed over the values, best bin of y). */
+export function violinBound(hist: readonly number[]): number {
+  let best = 0;
+  for (let b = 0; b < PAIR_BOUND.length; b++) {
+    let s = 0;
+    for (let a = 0; a < hist.length; a++) s += hist[a] * PAIR_BOUND[b][a];
+    best = Math.max(best, s);
+  }
+  return VIOLIN_UNIT * best;
+}
+
+/**
+ * The largest f over all cells: the shared width scale of every half violin (independent of what is on screen).
+ * Exact; cells are visited by decreasing bound and the values of a cell are fetched only while its bound exceeds the
+ * best maximum found so far, so only the largest rows are smoothed.
+ */
+export function violinMaxOf(cells: Iterable<ViolinCell>): number {
+  const byBound = Array.from(cells, (c) => ({ c, ub: violinBound(c.hist) })).filter((x) => x.ub > 0).sort((a, b) => b.ub - a.ub);
+  let best = 0;
+  for (const { c, ub } of byBound) {
+    if (ub <= best) break;
+    best = Math.max(best, violinOf(c.values()).max);
+  }
+  return best;
+}
+
+/**
+ * The cells of rows (member cells and ring cells), for `violinMaxOf`. `values(c, j)`: the contributors' memberships in
+ * the row's j-th set (asked only for the cells whose bound can still beat the maximum).
+ */
+export function violinCells<C>(rows: readonly C[], detail: (c: C) => RowDetail, values: (c: C, j: number) => ArrayLike<number> & object): ViolinCell[] {
+  const out: ViolinCell[] = [];
+  for (const c of rows) {
+    const det = detail(c);
+    det.hists.forEach((hist, j) => out.push({ hist, values: () => values(c, j) }));
+    for (const g of det.rings) out.push({ hist: g.hist, values: () => g.values });
+  }
+  return out;
 }
 
 // ---- points ----------------------------------------------------------------------------------------------------------

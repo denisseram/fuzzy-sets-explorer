@@ -230,8 +230,10 @@ export type MatrixProps = {
   R: number;
   G: number | null;
   onRange: (v: number) => void;
-  /** Shared count scale of every compact strip. */
+  /** Shared count scale of every compact strip: the largest 5-bin count over all filtered rows. */
   maxBin: number;
+  /** Shared width scale of every half violin: the largest f over all filtered rows (HIST_W px). */
+  violinMax: number;
   detail: (c: Combo) => RowDetail;
   /** Per set of a row: the contributors' original memberships (points and violins of Full rows). */
   values: (c: Combo) => RowValues;
@@ -338,13 +340,8 @@ function UpsetMatrix(p: MatrixProps) {
   const top = vp.top - OVERSCAN, bottom = vp.top + vp.h + OVERSCAN;
   const visible = lay.items.filter((it) => it.y + it.h >= top && it.y <= bottom);
 
-  // one horizontal scale for every half violin on screen: the largest f over the visible Full cells (rings included)
-  let maxF = 0;
-  for (const it of visible) {
-    if (it.kind !== "row" || lodOf(it.h) !== "full") continue;
-    for (const v of p.values(it.combo).values) maxF = Math.max(maxF, violinOf(v).max);
-    for (const g of p.detail(it.combo).rings) maxF = Math.max(maxF, violinOf(g.values).max);
-  }
+  // one horizontal scale for every half violin, from all filtered rows: it does not change when scrolling
+  const maxF = p.violinMax;
 
   // the selected row out of view: an arrow at the edge
   const selItem = selected ? lay.items.find((it) => it.kind === "row" && it.combo.key === selected) : undefined;
@@ -373,6 +370,10 @@ function UpsetMatrix(p: MatrixProps) {
     ...(p.G !== null ? [{ key: "G", v: p.G, title: `largest group: ${plural(p.G)} (distinct)` }] : []),
     { key: "U", v: p.N, title: `all elements: ${p.N}` },
   ];
+
+  // the shared count scales, as stated in the cell tooltips (the same rows for both levels of detail)
+  const violinScale = `violin width ${HIST_W} px = ${maxF.toFixed(1)} elements per 0.2 (largest in all rows)`;
+  const stripScale = `darkest = ${plural(p.maxBin)} per bin (largest in all rows)`;
 
   // ---- rows ----------------------------------------------------------------------------------------------------------
 
@@ -501,8 +502,8 @@ function UpsetMatrix(p: MatrixProps) {
             <rect
               key={b} x={x0} y={sy + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill="transparent"
               onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${name} · ${names[s]}`, member
-                ? [`${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`, `of ${plural(n)} contributing (${modeName})`]
-                : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors"]))}
+                ? [`${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`, `of ${plural(n)} contributing (${modeName})`, stripScale]
+                : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors", stripScale]))}
             />
           ))}
           {isSel && reference && member && (!pat || indexOfSorted(c.contributors, p.refElem ?? -1) >= 0) && (
@@ -555,11 +556,12 @@ function UpsetMatrix(p: MatrixProps) {
         tip(ev, `${names[s]} in ${name}: ${n.toLocaleString("en-US")} ${n === 1 ? "contributor" : "contributors"}`, [
           `${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`,
           modeName,
+          violinScale,
           ...(capped ? [`points: a fixed sample of ${shown.length} of ${n.toLocaleString("en-US")} (${MAX_POINTS} plus each cell's lowest and highest)`] : []),
         ]);
       } else {
         const g = rings.get(s)!;
-        tip(ev, `below τ but near ${names[s]}: ${g.values.length} of ${g.contributors} contributors`, [`${binLabel(b)}: ${plural(g.hist[b])}`, "not counted in masses or contributors"]);
+        tip(ev, `below τ but near ${names[s]}: ${g.values.length} of ${g.contributors} contributors`, [`${binLabel(b)}: ${plural(g.hist[b])}`, "not counted in masses or contributors", violinScale]);
       }
     };
     return (
@@ -751,7 +753,7 @@ function UpsetMatrix(p: MatrixProps) {
               <text x={PAD + 19} y={12}>contributors</text>
               <rect x={PAD + 88} y={4} width={14} height={9} rx={2} className="fu-bar-in" />
               <text x={PAD + 107} y={12}>mass</text>
-              {range < Math.max(p.R, p.G ?? 0) && (
+              {range < Math.max(p.R, p.G ?? 0, p.query?.agg.contributors ?? 0) && (
                 <g onMouseMove={(ev) => tip(ev, "Wrap: past the range", ["a bar longer than the range wraps: each further range is a narrower layer", "hatched 45°, then 135°, then both; beyond that two white slashes"])}>
                   <rect x={PAD + 138} y={4} width={14} height={9} rx={2} className="fu-bar-out" />
                   <rect x={PAD + 138} y={4} width={14} height={9} rx={2} fill={hatchOf("count", 1)} />
