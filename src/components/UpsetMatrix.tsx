@@ -11,6 +11,7 @@ import { HistBars } from "./MiniHist";
 
 /** Width of the column-header histograms (membership 0 left, 1 right) and the largest half-violin width (a count). */
 export const HIST_W = 72;
+export type CompactStyle = "strip" | "violin";
 /** Circles: one size for every set slot (smaller in short rows); a ring is the same disc in grey with a white hole. */
 const DOT_R = 6.5, HOLE_MIN = 1.5, HOLE_MAX = 5;
 /**
@@ -88,12 +89,12 @@ function PatDot({ cx, cy, r, pat, set }: { cx: number; cy: number; r: number; pa
 
 /**
  * A half violin right of the axis at `ax`: f (elements per 0.2 of membership, at y = 0, 0.02, …, 1) as a width on the
- * shared scale `maxF` (HIST_W px), membership on the vertical axis `yOf`.
+ * scale `maxF` (`w` px; HIST_W in Full cells), membership on the vertical axis `yOf`.
  */
-function Violin({ ax, f, maxF, yOf, color }: { ax: number; f: Float64Array; maxF: number; yOf: (v: number) => number; color: string }) {
+function Violin({ ax, f, maxF, yOf, color, w = HIST_W }: { ax: number; f: Float64Array; maxF: number; yOf: (v: number) => number; color: string; w?: number }) {
   if (!(maxF > 0)) return null;
   let d = `M${ax},${yOf(0).toFixed(1)}`;
-  for (let i = 0; i < VIOLIN_STEPS; i++) d += `L${(ax + (f[i] / maxF) * HIST_W).toFixed(1)},${yOf(i / (VIOLIN_STEPS - 1)).toFixed(1)}`;
+  for (let i = 0; i < VIOLIN_STEPS; i++) d += `L${(ax + (f[i] / maxF) * w).toFixed(1)},${yOf(i / (VIOLIN_STEPS - 1)).toFixed(1)}`;
   d += `L${ax},${yOf(1).toFixed(1)}Z`;
   return <path d={d} fill={color} fillOpacity={0.14} stroke={color} strokeWidth={1} strokeLinejoin="round" pointerEvents="none" />;
 }
@@ -223,6 +224,8 @@ export type MatrixProps = {
   threshold: Threshold | null;
   entries: Entry[];
   lod: LodSetting;
+  /** Compact cells: the 5-bin grayscale strip, or a transparent half violin of the same size (the row's line shows through). */
+  compactStyle: CompactStyle;
   fisheye: boolean;
   /** Number of elements (top axis 0–N). */
   N: number;
@@ -508,6 +511,8 @@ function UpsetMatrix(p: MatrixProps) {
   };
 
   /** Compact cells: a vertical strip of the 5 bins right of each circle; the reference element as a tick across it. */
+  const violinStyle = p.compactStyle === "violin";
+  const compactScale = violinStyle ? "violin width: the cell's largest value fills the cell (shape only; the bars give the size)" : stripScale;
   const compactCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, bg: string, name: string, pat: PatternRow | null) => {
     const n = c.contributors.length;
     const sh = h - 4, sy = 2, bh = sh / N_BINS;
@@ -517,16 +522,32 @@ function UpsetMatrix(p: MatrixProps) {
       if (!member && !ring) return null;
       const x0 = colX(ci) + STRIP_X;
       const counts = member ? det.hists[c.sets.indexOf(s)] : ring!.hist;
+      const v = violinStyle ? (member ? p.values(c).values[c.sets.indexOf(s)] : ring!.values) : null;
       return (
         <g key={s}>
-          <rect x={x0 - 3} y={1} width={STRIP_W + 6} height={h - 2} fill={bg} />
-          <g opacity={dim}><VStrip x={x0} y={sy} h={sh} counts={counts} maxC={p.maxBin} ring={!member} color={pat ? "var(--row-c)" : undefined} /></g>
+          {v ? (
+            // no background: the line joining the row's sets runs behind the violin
+            <g opacity={dim} pointerEvents="none">
+              <line x1={x0} x2={x0} y1={sy} y2={sy + sh} className="fu-hist-axis" />
+              {v.length > 0 && (
+                <Violin
+                  ax={x0} f={violinOf(v).f} maxF={violinOf(v).max} w={STRIP_W} yOf={(y) => sy + (1 - y) * sh}
+                  color={member ? (pat ? "var(--row-c)" : "var(--accent)") : "var(--near-ring)"}
+                />
+              )}
+            </g>
+          ) : (
+            <>
+              <rect x={x0 - 3} y={1} width={STRIP_W + 6} height={h - 2} fill={bg} />
+              <g opacity={dim}><VStrip x={x0} y={sy} h={sh} counts={counts} maxC={p.maxBin} ring={!member} color={pat ? "var(--row-c)" : undefined} /></g>
+            </>
+          )}
           {counts.map((kk, b) => (
             <rect
               key={b} x={x0} y={sy + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill="transparent"
               onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${name} · ${names[s]}`, member
-                ? [`${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`, `of ${plural(n)} contributing (${modeName})`, stripScale]
-                : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors", stripScale]))}
+                ? [`${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`, `of ${plural(n)} contributing (${modeName})`, compactScale]
+                : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors", compactScale]))}
             />
           ))}
           {isSel && reference && member && (!pat || indexOfSorted(c.contributors, p.refElem ?? -1) >= 0) && (

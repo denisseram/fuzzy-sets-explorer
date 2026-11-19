@@ -15,7 +15,7 @@ import { violinCells, violinMaxOf } from "../lib/violin";
 import MiniHist from "./MiniHist";
 import Popover from "./Popover";
 import ThresholdSidebar from "./ThresholdSidebar";
-import UpsetMatrix, { type Agg, type RefMark, type Snapshot } from "./UpsetMatrix";
+import UpsetMatrix, { type Agg, type CompactStyle, type RefMark, type Snapshot } from "./UpsetMatrix";
 import "../styles/fuzzy-upset.css";
 
 type Hover = { x: number; y: number; title: string; rows: string[] };
@@ -27,6 +27,7 @@ const SORTS: [SortBy, string][] = [["degree", "Degree"], ["mass", "Membership ma
 const GROUPS: [GroupBy, string][] = [["none", "None"], ["degree", "Degree"], ["set", "Set"], ["pairs", "Pairs"], ["setPairs", "Set → pairs"]];
 const ORDERS: [SetOrder, string][] = [["input", "Input order"], ["sigma", "Sigma-count"], ["similarity", "Similarity"]];
 const LODS: [LodSetting, string][] = [["auto", "Auto"], ["full", "Full"], ["compact", "Compact"], ["minimal", "Minimal"]];
+const COMPACT_STYLES: [CompactStyle, string][] = [["strip", "Grayscale strip"], ["violin", "Half violin"]];
 const NEXT_Q: Record<QState, QState> = { may: "must", must: "not", not: "may" };
 
 /** Metadata of one observation (categories and numerical attributes), for tooltips. */
@@ -92,6 +93,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [sortBy, setSortBy] = useState<SortBy>("degree");
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [lod, setLod] = useState<LodSetting>("auto");
+  const [compactStyle, setCompactStyle] = useState<CompactStyle>("strip");
   const [fisheye, setFisheye] = useState(false);
   const [sideOpen, setSideOpen] = useState(false);
   const [hop, setHop] = useState(0);
@@ -424,6 +426,9 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
                 <label className="fs-field" title="Level of detail per cell: Full = points and half violin, Compact = vertical grayscale strip, Minimal = circles only. Auto: the selected row (and the fish-eye focus) Full, the others at the largest level at which all rows fit"><span className="fc-lbl">Rows</span>
                   <select value={lod} onChange={(e) => setLod(e.target.value as LodSetting)}>{LODS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
                 </label>
+                <label className="fs-field" title="Cells of Compact rows: the 5 membership bins as grayscale cells (darker = more elements), or a half violin of the same size, transparent so the row's line shows through (its width is scaled per cell: shape only)"><span className="fc-lbl">Compact cells</span>
+                  <select value={compactStyle} onChange={(e) => setCompactStyle(e.target.value as CompactStyle)}>{COMPACT_STYLES.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+                </label>
                 <label className="fc-check" title="When rows overflow: the hovered or selected row and 3 neighbours on each side get full height">
                   <input type="checkbox" checked={fisheye} onChange={(e) => setFisheye(e.target.checked)} /> Fish-eye
                 </label>
@@ -574,7 +579,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
             {!shelf.length && <span className="fp-hint">all sets selected</span>}
           </div>
           <UpsetMatrix
-            names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} fisheye={fisheye}
+            names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} compactStyle={compactStyle} fisheye={fisheye}
             N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} violinMax={violinMax} detail={detail} groupAgg={groupAgg} query={query}
             values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll} open={open} onToggleOpen={onToggleOpen}
             selected={selected} pinned={pinned} onPin={onPin} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}

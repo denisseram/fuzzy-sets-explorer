@@ -93,7 +93,7 @@ function Explorer({ ds }: { ds: Dataset }) {
           contributors nearly reach (from β·τ up to τ); its hole shrinks as their mean approaches τ.
           <br /><br />
           <strong>Many rows</strong>: Filters, Group by, Sort and Query work as in UpSet. Rows shrink to fit (Rows: points
-          and violins, grayscale strips, or circles only; the selected row stays full); Fish-eye enlarges the rows around the hovered one; pinned rows
+          and violins, grayscale strips or small half violins (Compact cells), or circles only; the selected row stays full); Fish-eye enlarges the rows around the hovered one; pinned rows
           (the pin at a row's right end, or Shift-click) stay full, to compare their violins; with a row
           selected, Neighbourhood keeps the rows within 1–3 set changes. The scale above the bars sets their range
           (longer bars wrap). Snapshot stores the ranking to compare it with later settings (e.g. another τ).

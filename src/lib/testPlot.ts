@@ -24,7 +24,7 @@ export function renderMatrix(d: Memberships, names: string[], mode: Mode, selKey
     };
   }
   const props: MatrixProps = {
-    names, cols: K, mode, threshold: null, lod: "auto", fisheye: false, open, onToggleOpen: noop,
+    names, cols: K, mode, threshold: null, lod: "auto", compactStyle: "strip", fisheye: false, open, onToggleOpen: noop,
     entries: displayEntries(combos, null, new Set(), null, { open, of: (c) => patternRows(d, c, K, null, mode, { names, cols: K }) }),
     N: d.N, range, R: Math.max(...combos.map((c) => c.contributors.length)), G: null, onRange: noop, maxBin: Math.max(1, maxBinOf(combos.map(detail))), detail,
     violinMax: violinMaxOf(violinCells(combos, detail, (c, j) => values(c).values[j])), values,
