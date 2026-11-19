@@ -444,7 +444,7 @@ function UpsetMatrix(p: MatrixProps) {
     const refV = (j: number) => vals.values[j][at];
     const refMin = ref === null ? 0 : isSel && reference ? reference.value : Math.min(...part.map((q) => refV(q.j)));
     const profile = ref === null ? [] : part.map((q) => [colX(q.ci) + pointDx(ref), yOf(refV(q.j))] as const);
-    const shown = pointsToDraw(vals.idx, ref);
+    const shown = pointsToDraw(vals.idx, vals.values, ref);
     const capped = n > MAX_POINTS;
     const ptTip = (ev: React.MouseEvent) => {
       const d = (ev.target as SVGElement).dataset;
@@ -466,7 +466,7 @@ function UpsetMatrix(p: MatrixProps) {
         tip(ev, `${names[s]} in ${name}: ${n.toLocaleString("en-US")} ${n === 1 ? "contributor" : "contributors"}`, [
           `${names[s]} membership in ${binLabel(b)}: ${plural(kk)}`,
           modeName,
-          ...(capped ? [`points hidden above ${MAX_POINTS} contributors`] : []),
+          ...(capped ? [`points: a fixed sample of ${shown.length} of ${n.toLocaleString("en-US")} (${MAX_POINTS} plus each cell's lowest and highest)`] : []),
         ]);
       } else {
         const g = rings.get(s)!;

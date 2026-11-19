@@ -7,7 +7,7 @@ import {
 } from "./fuzzyDecomposition";
 import { displayEntries, pickReference, referenceLabel } from "./upsetView";
 import {
-  bezierAt, indexOfSorted, integrate, jitter, MAX_POINTS, pointsToDraw, profilePath, profileSegments, violin, violinDirect, VIOLIN_STEPS, VIOLIN_UNIT,
+  bezierAt, indexOfSorted, integrate, jitter, MAX_POINTS, pointsToDraw, priority, profilePath, profileSegments, violin, violinDirect, VIOLIN_STEPS, VIOLIN_UNIT,
 } from "./violin";
 
 const A = 0, B = 1, C = 2;
@@ -72,13 +72,30 @@ describe("points", () => {
     expect(Math.max(...xs)).toBeLessThan(1);
     expect(Math.abs(xs.reduce((s, v) => s + v, 0) / xs.length - 0.5)).toBeLessThan(0.03); // spread over the strip
   });
-  it("cap: above 200 contributors only the reference element's points are drawn", () => {
+  it("up to 200 contributors: every point", () => {
     const few = Array.from({ length: MAX_POINTS }, (_, i) => i * 2);
-    expect(pointsToDraw(few, null)).toHaveLength(MAX_POINTS);
-    const many = Array.from({ length: MAX_POINTS + 1 }, (_, i) => i * 2);
-    expect(pointsToDraw(many, null)).toEqual([]);
-    expect(pointsToDraw(many, 34)).toEqual([17]);
-    expect(pointsToDraw(many, 35)).toEqual([]); // not a contributor
+    expect(pointsToDraw(few, [few.map(() => 0.5)], null)).toEqual(few.map((_, j) => j));
+  });
+  it("above 200: a fixed sample of 200 by priority, plus each cell's lowest and highest, plus the reference", () => {
+    const n = 1500;
+    const idx = Array.from({ length: n }, (_, i) => i * 3);
+    const vals = [Float64Array.from(idx, () => 0.1 + 0.8 * rnd()), Float64Array.from(idx, () => 0.1 + 0.8 * rnd())];
+    vals[0][700] = 0.01, vals[0][701] = 0.99, vals[1][5] = 0, vals[1][6] = 1;
+    const s = pointsToDraw(idx, vals, null);
+    const byPriority = idx.map((x, j) => [priority(x), j]).sort((a, b) => a[0] - b[0]).slice(0, MAX_POINTS).map(([, j]) => j);
+    expect(new Set(s)).toEqual(new Set([...byPriority, 700, 701, 5, 6]));
+    expect(s).toEqual([...s].sort((a, b) => a - b));
+    expect(pointsToDraw(idx, vals, null)).toEqual(s); // deterministic
+    // the reference element is added if it contributes; a non-contributor adds nothing
+    const out = idx.findIndex((_, j) => !s.includes(j));
+    expect(pointsToDraw(idx, vals, idx[out])).toEqual([...s, out].sort((a, b) => a - b));
+    expect(pointsToDraw(idx, vals, 1)).toEqual(s);
+    // one global order: the sample of a sub-population keeps the elements of the larger row's sample that it contains
+    const sub = idx.filter((_, j) => j % 2 === 0);
+    const subVals = vals.map((v) => Float64Array.from(sub, (_, j) => v[2 * j]));
+    const subS = new Set(pointsToDraw(sub, subVals, null).map((j) => sub[j]));
+    const kept = byPriority.map((j) => idx[j]).filter((x) => sub.includes(x));
+    expect(kept.every((x) => subS.has(x))).toBe(true);
   });
   it("per-cell values: the contributors' original memberships (fixture)", () => {
     const inc = inclusiveCombos(fx, K3).combos.find((c) => c.key === "0,1")!;
@@ -189,12 +206,23 @@ describe("element profile (fixture)", () => {
     expect(svg).not.toMatch(/stroke="var\(--select\)" stroke-width="2"/);
     expect(svg).toContain(">E1: min(B) = 0.70</text>");
   });
-  it("above 200 contributors: the violins without points, except the reference element's", () => {
+  it("above 200 contributors: the sample's points in every cell, and the reference element's", () => {
     const rows = Array.from({ length: 250 }, (_, x) => [`P${x}`, 0.2 + 0.6 * rnd(), 0.2 + 0.6 * rnd()] as [string, number, number]);
     const d = data(rows);
     const many = renderMatrix(d, ["A", "B"], "inclusive", "0,1", 12);
-    expect(many.match(/class="fu-pt"/g)).toBeNull();
+    // all three rows (A, B, A ∩ B) have the 250 elements as contributors and draw their sample
+    const all = Array.from({ length: 250 }, (_, x) => x);
+    const sample = (sets: number[], ref: number | null) => pointsToDraw(all, sets.map((i) => Float64Array.from(all, (x) => d.P[x * 2 + i])), ref);
+    const ab = sample([0, 1], 12);
+    expect(ab.length).toBeLessThanOrEqual(MAX_POINTS + 2 * 2 + 1);
+    const want = sample([0], null).length + sample([1], null).length + 2 * (ab.length - 1);
+    expect(many.match(/class="fu-pt"/g)).toHaveLength(want);
     expect(many.match(/class="fu-pt-ref"/g)).toHaveLength(2);
+    // the same elements in both cells of A ∩ B
+    const row = many.slice(many.indexOf('aria-label="A ∩ B"'));
+    const xs = [...row.matchAll(/class="fu-pt" data-x="(\d+)" data-s="(\d)"/g)];
+    const inA = xs.filter((m) => m[2] === "0").map((m) => m[1]), inB = xs.filter((m) => m[2] === "1").map((m) => m[1]);
+    expect(inA).toEqual(inB);
     const few = renderMatrix(data(rows.slice(0, 150)), ["A", "B"], "inclusive", "0,1", 12);
     // rows A and B (Full, 150 points each) and A ∩ B (2 × 149 points plus the reference element's 2)
     expect(few.match(/class="fu-pt"/g)).toHaveLength(150 + 150 + 2 * 149);

@@ -124,7 +124,11 @@ components, not thresholded values):
   "1" once per row, left of the first cell. A thin vertical axis line per cell.
 - **Points**: one per contributor, at its membership, in a 22 px jitter strip left of the axis (radius 2.5 px). The
   horizontal offset is a hash of the element's index: the same in every cell of the row and across mode, τ and
-  selection changes. Above **200 contributors** a row draws no points (except the reference element's, section 6).
+  selection changes. Above **200 contributors** a row draws a fixed sample, the same elements in every cell: the 200
+  contributors with the lowest sampling priority (a second hash of the element index, independent of the jitter),
+  plus each cell's lowest and highest membership, plus the reference element (section 6). The priority is one global
+  order, so an element sampled in one row tends to be sampled in other rows and after a change of mode or τ. The
+  violin always summarises every contributor; its tooltip says when the points are a sample.
 - **Half violin**, right of the axis, up to 72 px wide: smoothed counts
 
       f(y) = 0.2 × Σ_k [ K_h(y − v_k) + K_h(y + v_k) + K_h(y − (2 − v_k)) ]

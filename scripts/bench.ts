@@ -2,7 +2,7 @@
 // Synthetic soft-clustering output: N = 50,000 elements, |K| = 20 sets, each element with 1–4 positive memberships.
 // Targets (iteration 2, section 1e): additive < 300 ms, inclusive with minMass = 0 < 1 s.
 import { additiveCombos, CELL_BUDGET, inclusiveCombos, ROW_BUDGET, rowValues, type Memberships } from "../src/lib/fuzzyDecomposition.ts";
-import { violin, violinDirect } from "../src/lib/violin.ts";
+import { pointsToDraw, violin, violinDirect } from "../src/lib/violin.ts";
 
 function rng(seed: number) {
   return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -69,3 +69,4 @@ const vals = time("cell values of a 50,000-contributor row, 20 sets", () => rowV
 time("violin of a 50,000-value cell (0.01 bins)", () => violin(vals.values[0]));
 time("violin of a 50,000-value cell (direct sum)", () => violinDirect(vals.values[0]), 3);
 time("violins of 20 cells × 1,000 values (0.01 bins)", () => vals.values.map((v) => violin(v.subarray(0, 1000))));
+time("point sample of a 50,000-contributor row, 20 sets (uncached)", () => pointsToDraw(all, vals.values.map((v) => v.slice()), null), 3);

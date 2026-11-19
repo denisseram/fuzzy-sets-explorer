@@ -93,14 +93,24 @@ export function violinOf(values: ArrayLike<number> & object): { f: Float64Array;
 
 // ---- points ----------------------------------------------------------------------------------------------------------
 
-/** Deterministic offset in [0, 1) of an element (by its index): the same in every cell, mode, τ and render. */
-export function jitter(x: number): number {
-  let h = Math.imul(x ^ 0x9e3779b9, 0x85ebca6b);
+/** A 32-bit integer hash of an element index in [0, 1) (murmur3 finaliser); `seed` gives independent hashes. */
+function hash01(x: number, seed: number): number {
+  let h = Math.imul(x ^ seed, 0x85ebca6b);
   h ^= h >>> 13;
   h = Math.imul(h, 0xc2b2ae35);
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
+
+/** Deterministic offset in [0, 1) of an element (by its index): the same in every cell, mode, τ and render. */
+export const jitter = (x: number) => hash01(x, 0x9e3779b9);
+
+/**
+ * Sampling priority of an element, independent of its jitter (so the sample is not one side of the strip). A row
+ * samples its contributors with the lowest priority: the sample is a subset of one global order, so an element sampled
+ * in one row tends to be sampled in the others and after a change of mode or τ.
+ */
+export const priority = (x: number) => hash01(x, 0x5bd1e995);
 
 /** Position of `x` in an ascending array (−1 if absent). */
 export function indexOfSorted(a: readonly number[], x: number): number {
@@ -114,14 +124,42 @@ export function indexOfSorted(a: readonly number[], x: number): number {
   return -1;
 }
 
+/** The sample of a large row without the reference element, computed once per row (values arrays are cached). */
+const sampleCache = new WeakMap<object, number[]>();
+
 /**
- * Positions (into the row's ascending contributors) of the points to draw: all of them up to `cap`; above it only the
- * reference element's (if it contributes).
+ * Positions (into the row's ascending contributors) of the points to draw. Up to `cap` contributors: all of them.
+ * Above: a fixed sample, the same in every cell of the row: the `cap` contributors of lowest priority, plus each
+ * cell's lowest and highest membership (ties: the first contributor), plus the reference element if it contributes.
+ * `values` holds the row's memberships per set, aligned with `contributors`.
  */
-export function pointsToDraw(contributors: readonly number[], ref: number | null, cap = MAX_POINTS): number[] {
-  if (contributors.length <= cap) return contributors.map((_, j) => j);
+export function pointsToDraw(contributors: readonly number[], values: readonly ArrayLike<number>[], ref: number | null, cap = MAX_POINTS): number[] {
+  const n = contributors.length;
+  if (n <= cap) return contributors.map((_, j) => j);
+  let base = sampleCache.get(values);
+  if (!base || cap !== MAX_POINTS) {
+    const pr = new Float64Array(n);
+    for (let j = 0; j < n; j++) pr[j] = priority(contributors[j]);
+    // priorities are uniform: sort only the contributors below a cut that holds ~2 · cap of them (all if too few)
+    const cut = (2 * cap) / n;
+    let cand: number[] = [];
+    for (let j = 0; j < n; j++) if (pr[j] < cut) cand.push(j);
+    if (cand.length < cap) cand = Array.from({ length: n }, (_, j) => j);
+    const order = cand.sort((a, b) => pr[a] - pr[b] || a - b);
+    const pick = new Set(order.slice(0, cap));
+    for (const v of values) {
+      let lo = 0, hi = 0;
+      for (let j = 1; j < n; j++) {
+        if (v[j] < v[lo]) lo = j;
+        if (v[j] > v[hi]) hi = j;
+      }
+      pick.add(lo).add(hi);
+    }
+    base = [...pick].sort((a, b) => a - b);
+    if (cap === MAX_POINTS) sampleCache.set(values, base);
+  }
   const j = ref === null ? -1 : indexOfSorted(contributors, ref);
-  return j >= 0 ? [j] : [];
+  return j < 0 || base.includes(j) ? base : [...base, j].sort((a, b) => a - b);
 }
 
 // ---- the element profile -----------------------------------------------------------------------------------------------
