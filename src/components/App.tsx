@@ -13,6 +13,7 @@ const DATASETS: DatasetOption[] = [
   { key: "iris", label: "Iris species, kNN (graded)" },
   { key: "integration", label: "Integration cell types, kNN (graded)" },
   { key: "deconv_sim", label: "Spatial deconvolution, simulated (graded)" },
+  { key: "dota2", label: "Dota 2 hero roles (graded)" },
   { key: "fixture", label: "Correctness fixture (4 elements)" },
 ];
 
