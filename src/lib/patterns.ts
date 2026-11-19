@@ -62,18 +62,16 @@ export function classify(v: ArrayLike<number>, { cut = PATTERN_CUT, eps = PATTER
 }
 
 const EQUAL_ORDER = ["E:high", "E:middle", "E:low"];
-const MIXED_COLORS = ["var(--pat-mixed-1)", "var(--pat-mixed-2)", "var(--pat-mixed-3)"];
 
-/** Mixed high-sets in canonical order (more high sets first, then by column position): the colour follows the pattern. */
-function canonicalMixed(k: number): string[] {
-  const out: number[][] = [];
-  for (let mask = 1; mask < (1 << k) - 1; mask++) out.push(Array.from({ length: k }, (_, p) => p).filter((p) => mask & (1 << p)));
-  out.sort((a, b) => b.length - a.length || a.join(",").localeCompare(b.join(","), "en", { numeric: true }));
-  return out.map((h) => "H:" + h.join(","));
-}
-
-/** Colour of a count group: one hue from light (no high set) to dark (all high), so it follows the count, not the rank. */
-export const countColor = (count: number, k: number) => `color-mix(in oklab, var(--pat-count) ${Math.round(35 + (65 * count) / k)}%, var(--panel))`;
+/**
+ * Colour of a high/low pattern from its number of high sets `n` of the row's `k`, the same rule in rows of every
+ * degree: all high (n = k) orange, all low (n = 0) violet; mixed patterns one blue, lighter with fewer high sets
+ * (share n / k, mixed in OKLab between --pat-mixed-few and --pat-mixed-many). So "A high · B low" and "A low · B high"
+ * share a colour (the circles and the label tell them apart), and a count group "High in n of k" has the colour of its
+ * patterns. Equal patterns have their own colours.
+ */
+export const highColor = (n: number, k: number) =>
+  n >= k ? "var(--pat-high)" : n <= 0 ? "var(--pat-low)" : `color-mix(in oklab, var(--pat-mixed-many) ${Math.round((100 * n) / k)}%, var(--pat-mixed-few))`;
 
 type Opts = PatternOptions & { names: readonly string[]; cols: readonly number[] };
 type Groups = Map<string, { idx: number[]; mass: number }>;
@@ -200,7 +198,7 @@ export function patternRows(d: Memberships, c: Combo, K: readonly number[], th: 
       const e = byCount.get(n);
       if (!e) continue;
       e.idx.sort((a, b) => a - b);
-      const color = countColor(n, k);
+      const color = highColor(n, k);
       if (n === k) out.push(make(`H:${all}`, "allHigh", `High in all ${k}`, color, e.idx, e.mass, { count: n }));
       else if (n === 0) out.push(make("H:", "allLow", "High in none (all low)", color, e.idx, e.mass, { count: 0 }));
       else out.push(make(`N:${n}`, "count", `High in ${n} of ${k} (${e.ids} ${e.ids === 1 ? "pattern" : "patterns"})`, color, e.idx, e.mass, { count: n, openable: e.ids > 1 }));
@@ -211,20 +209,19 @@ export function patternRows(d: Memberships, c: Combo, K: readonly number[], th: 
 
   const mixed = [...groups.keys()].filter((id) => id.startsWith("H:") && id !== "H:" && id !== `H:${all}`);
   const fixed = [`H:${all}`, "H:", ...EQUAL_ORDER].filter((id) => groups.has(id));
-  const canon = canonicalMixed(k);
   const mixedLabel = (h: number[]) => Array.from({ length: k }, (_, p) => `${nm(p)} ${h.includes(p) ? "high" : "low"}`).join(" · ");
   const allHigh = groups.get(`H:${all}`);
-  if (allHigh) out.push(make(`H:${all}`, "allHigh", k === 2 ? "Both high" : "All high", "var(--pat-high)", allHigh.idx, allHigh.mass));
+  if (allHigh) out.push(make(`H:${all}`, "allHigh", k === 2 ? "Both high" : "All high", highColor(k, k), allHigh.idx, allHigh.mass));
   out.push(...mixedRows(
     mixed, groups, Math.max(1, MAX_PATTERN_ROWS - fixed.length),
-    (id, g) => make(id, "mixed", mixedLabel(highOf(id)), MIXED_COLORS[canon.indexOf(id)] ?? "var(--pat-other)", g.idx, g.mass),
+    (id, g) => make(id, "mixed", mixedLabel(highOf(id)), highColor(highOf(id).length, k), g.idx, g.mass),
     (ids) => {
       const m = mergeOther(ids, groups);
       return make("H:other", "other", `Other mixed (${ids.length} patterns)`, "var(--pat-other)", m.idx, m.mass);
     },
   ));
   const allLow = groups.get("H:");
-  if (allLow) out.push(make("H:", "allLow", k === 2 ? "Both low" : "All low", "var(--pat-low)", allLow.idx, allLow.mass));
+  if (allLow) out.push(make("H:", "allLow", k === 2 ? "Both low" : "All low", highColor(0, k), allLow.idx, allLow.mass));
   equalRows();
   return out;
 }

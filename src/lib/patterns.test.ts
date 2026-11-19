@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { additiveCombos, histogram, inclusiveCombos, validateMemberships, type Memberships, type Threshold } from "./fuzzyDecomposition";
-import { classify, countColor, MAX_PATTERN_ROWS, patternChildren, patternRows, ribbonCounts, ribbonGeometry } from "./patterns";
+import { classify, highColor, MAX_PATTERN_ROWS, patternChildren, patternRows, ribbonCounts, ribbonGeometry } from "./patterns";
 import { autoFullRows, autoRowHeight, displayEntries, layout, lodOf, rowHeight } from "./upsetView";
 import { renderMatrix } from "./testPlot";
 
@@ -48,7 +48,7 @@ describe("pattern rows", () => {
     expect(rows[0].mass).toBeCloseTo(0.2, 12);
     expect(rows[1].mass).toBeCloseTo(1.3, 12);
     expect(rows.map((r) => r.key)).toEqual(["0,1|H:1", "0,1|E:high"]);
-    expect(rows[0].pattern.color).toBe("var(--pat-mixed-2)"); // "B high" is the second mixed pattern of two sets
+    expect(rows[0].pattern.color).toBe(highColor(1, 2)); // one of two sets high: the mixed colour at share 1/2
     // additive AB: E1 (component 0.2) and E4 (0.6), both equal high
     const add = additiveCombos(fx, K3).find((c) => c.key === "0,1")!;
     const ra = patternRows(fx, add, K3, null, "additive", { names: NAMES, cols: K3 });
@@ -98,6 +98,10 @@ describe("pattern rows", () => {
     expect(rows.map((r) => r.pattern.label)).toEqual([
       "All high", "A high · B high · C low", "A high · B low · C low", "A low · B low · C high", "All low", "Equal, high", "Equal, middle", "Equal, low",
     ]);
+    // colours by the number of high sets only: no mixed pattern is grey, patterns with the same count share a colour
+    expect(rows.slice(0, 5).map((r) => r.pattern.color)).toEqual([
+      "var(--pat-high)", highColor(2, 3), highColor(1, 3), highColor(1, 3), "var(--pat-low)",
+    ]);
   });
   it("rows of 4+ sets: count groups from all high to none, colours by count, groups open into their patterns", () => {
     // 6 sets; mask m: high (0.6 / 0.9 alternating) in the sets of m, low (0.1 / 0.35) elsewhere, so no element is
@@ -118,12 +122,15 @@ describe("pattern rows", () => {
     ]);
     expect(top.flatMap((r) => r.contributors).sort((a, b) => a - b)).toEqual(row.contributors);
     expect(top.map((r) => r.pattern.openable)).toEqual([false, true, true, true, true, true, false, false]);
-    expect(top[0].pattern.color).toBe(countColor(6, 6));
-    expect(top[3].pattern.color).toBe(countColor(3, 6));
+    // the same colours as in rows of 2 or 3 sets: all high orange, all low violet, mixed by the share of high sets
+    expect(top[0].pattern.color).toBe("var(--pat-high)");
+    expect(top[6].pattern.color).toBe("var(--pat-low)");
+    expect(top[3].pattern.color).toBe(highColor(3, 6));
+    expect(highColor(3, 6)).toBe(highColor(1, 2));
     // the colour follows the count: the same without the all-high and 5-of-6 elements
     const fewer = data(rows.filter((r) => r.slice(1).filter((v) => (v as number) >= 0.5).length < 5));
     const fr = patternRows(fewer, inclusiveCombos(fewer, K).combos.find((c) => c.sets.length === 6)!, K, null, "inclusive", o);
-    expect(fr.find((r) => r.pattern.count === 3)!.pattern.color).toBe(countColor(3, 6));
+    expect(fr.find((r) => r.pattern.count === 3)!.pattern.color).toBe(highColor(3, 6));
     // a group opens into its patterns: they partition it; at most 12, the smallest merged into "Other"
     const three = top[3];
     const kids = patternChildren(d, three, K, null, "inclusive", o);

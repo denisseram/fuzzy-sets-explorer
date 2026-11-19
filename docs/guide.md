@@ -211,8 +211,11 @@ one pattern:
   genres has 184 distinct patterns but only 8 count groups (none 74, one 433, two 448, three 309, four 173, five
   46, six 15, seven 2). A count group with more than one pattern has its own ▸ and opens into its patterns ("↳ High
   in Drama, Comedy", in the group's colour, as a share of the group); at most 12, the smallest merged into "Other (n
-  patterns)". Count groups are coloured by their count, one hue from light (none) to dark (all high), so a group
-  keeps its colour whatever other groups exist.
+  patterns)". Count groups take the colour of their patterns (see colours below), so a group keeps its colour
+  whatever other groups exist.
+- **Colours** follow one rule in rows of every degree: all high orange, all low violet, and every mixed pattern one
+  blue, lighter with fewer high sets (by the share of high sets: "A high · B low" and "A low · B high" share a colour;
+  the circles and the label tell them apart). Equal rows: three magenta steps.
 
 Pattern rows partition the row: their contributors add up to the row's, and their masses (the sum of each
 contributor's value in the row: the inclusive minimum of m', or the component) add up to the row's mass. They use the
@@ -267,9 +270,9 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 ## 9. Colours and sizes
 
 - Navy (#282C5F): bars, histograms, violins (fill 14 %) and points (55 %).
-- Patterns (validated as adjacent pairs, every pattern row labelled): all high #eb6834, mixed #2a78d6, #1baf7a,
-  #eda100 (further mixed patterns grey #9a9894), all low #6250d6, equal high / middle / low #a8325f, #d55181, #e99ab8.
-  Count groups (4+ sets): #c2541f mixed with the panel from 35 % (no high set) to 100 % (all high).
+- Patterns (every pattern row labelled), the same in rows of every degree, including the count groups of 4+ sets: all
+  high #eb6834, all low #6250d6; mixed n of k high: #4ebceb mixed in OKLab with #00537e at n / k (e.g. #2986b3 for
+  1 of 2); equal high / middle / low #a8325f, #d55181, #e99ab8; "Other" grey #9a9894.
   Ribbons: navy at 18 % in rows, the pattern colour at 35 % in pattern rows. Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
   Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference profile, line, band, label and τ marks.
 - Horizon wraps (bars past the range): the measure's colour plus a hatch (ink lines at 45 % on the light bar, white

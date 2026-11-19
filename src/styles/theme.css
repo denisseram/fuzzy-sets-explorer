@@ -28,20 +28,20 @@
   --rank-down: #B91C1C;
   /* stubs: rows hidden in place */
   --stub: #D5D7DD;
-  /* joint patterns (pattern rows, their ribbons and points): categorical in row order, validated as adjacent pairs
-     (dataviz validate_palette.js: CVD ΔE ≥ 9.1, normal ≥ 22.9); every pattern row also carries a text label. Equal
-     rows are one hue (magenta) in three steps; mixed patterns beyond the third are grey. */
+  /* joint patterns (pattern rows, their ribbons and points); every pattern row also carries a text label. One rule for
+     rows of every degree (lib/patterns.ts, highColor): all high orange, all low violet, mixed patterns one blue from
+     --pat-mixed-few (few high sets) to --pat-mixed-many (most), mixed in OKLab by the share of high sets (OKLCH hue
+     230, C 0.12, L 0.75 → 0.41). Validated (dataviz validate_palette.js, light, on #fff): 2-set rows in row order all
+     pass (worst CVD ΔE 11.5, normal 16.1); the steps of 3- and 5-set rows pass as an ordinal (ΔL ≥ 0.06). Equal rows
+     are one hue (magenta) in three steps; "Other" grey. */
   --pat-high: #eb6834;
-  --pat-mixed-1: #2a78d6;
-  --pat-mixed-2: #1baf7a;
-  --pat-mixed-3: #eda100;
+  --pat-mixed-few: #4ebceb;
+  --pat-mixed-many: #00537e;
   --pat-low: #6250d6;
   --pat-eq-high: #a8325f;
   --pat-eq-mid: #d55181;
   --pat-eq-low: #e99ab8;
   --pat-other: #9a9894;
-  /* count groups (rows of 4+ sets): one hue, mixed with the panel from 35 % (no high set) to 100 % (all high) */
-  --pat-count: #c2541f;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
