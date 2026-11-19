@@ -248,6 +248,8 @@ export type MatrixProps = {
   onPick: (key: string, x: number) => void;
   /** Draw the reference element's profile in every visible Full row where it contributes. */
   profileAll: boolean;
+  /** Rows the reference element contributes to, shown Full (with "Open all its rows"). */
+  refRows: ReadonlySet<string>;
   /** Rows opened into their pattern rows (lib/patterns.ts), and the ▸ toggle. */
   open: ReadonlySet<string>;
   onToggleOpen: (key: string) => void;
@@ -325,11 +327,13 @@ function UpsetMatrix(p: MatrixProps) {
   // Auto: the selected and pinned rows, open rows with their pattern rows and the fish-eye focus rows are always Full;
   // the others take the largest level that fits (open rows do not take height from them). Compact and Minimal: pinned
   // rows are Full.
+  // pinned rows and the reference element's rows
+  const keep = useMemo(() => (p.refRows.size ? new Set([...p.pinned, ...p.refRows]) : p.pinned), [p.pinned, p.refRows]);
   const baseFull = useMemo(
-    () => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, undefined, p.pinned) : p.lod === "full" ? new Set<string>() : autoFullRows(p.entries, null, null, undefined, p.pinned)),
-    [p.lod, p.entries, selected, focus, p.pinned],
+    () => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, undefined, keep) : p.lod === "full" ? new Set<string>() : autoFullRows(p.entries, null, null, undefined, keep)),
+    [p.lod, p.entries, selected, focus, keep],
   );
-  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, p.open, p.pinned) : baseFull), [p.lod, p.entries, selected, focus, p.open, p.pinned, baseFull]);
+  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, p.open, keep) : baseFull), [p.lod, p.entries, selected, focus, p.open, keep, baseFull]);
   const rowH = autoRowHeight(p.lod, p.entries, avail - counts.headers * hH0 - counts.stubs * 5, baseFull);
   const hH = headerH(rowH);
   const lay = useMemo(
@@ -410,7 +414,7 @@ function UpsetMatrix(p: MatrixProps) {
     const owner = pat ? pat.parent : c.key;
     const isSel = selected === owner;
     const isPin = p.pinned.has(owner);
-    const dim = selected && !isSel && !isPin && !p.focusMode ? 0.45 : 1;
+    const dim = selected && !isSel && !isPin && !p.refRows.has(owner) && !p.focusMode ? 0.45 : 1;
     const bg = isSel && !pat ? "var(--accent-bg)" : "var(--panel)";
     const name = rowName(c.sets);
     const cxs = cols.flatMap((s, ci) => (c.sets.includes(s) ? [colX(ci) + CIRCLE_X] : []));
@@ -571,7 +575,7 @@ function UpsetMatrix(p: MatrixProps) {
     const part = cols.flatMap((s, ci) => (c.sets.includes(s) ? [{ s, ci, j: c.sets.indexOf(s) }] : []));
     const gx0 = colX(0) + JIT_X, gx1 = colX(k - 1) + AXIS_X + HIST_W;
     const px0 = colX(part[0].ci) + JIT_X, px1 = colX(part[part.length - 1].ci) + AXIS_X + HIST_W;
-    // the reference element in this row: in the selected row, or in every row with "Profile in all rows"
+    // the reference element in this row: in the selected row, or in every row with "Open all its rows"
     const x = p.refElem;
     const at = x !== null && (isSel ? reference !== null : p.profileAll) ? indexOfSorted(vals.idx, x) : -1;
     const ref = at >= 0 ? x! : null;

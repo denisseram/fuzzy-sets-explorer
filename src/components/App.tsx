@@ -84,7 +84,8 @@ function Explorer({ ds }: { ds: Dataset }) {
           (the sum of their values), on one axis. <strong>Cells</strong>: one point per contributor at its original
           membership in that set (0 bottom, 1 top), and a half violin of the same values (smoothed counts, one scale for
           all). <strong>Reference element</strong>: click a point (or pick it in the field) to draw that element's
-          profile across the row and a dashed line at its minimum over the row's sets; in additive mode the shaded band
+          profile across the row and a dashed line at its minimum over the row's sets (every row it contributes to opens
+          at full detail with its points highlighted); in additive mode the shaded band
           is its contribution. <strong>Patterns</strong>: ribbons between neighbouring set axes show how the
           memberships combine (thickness = elements); ▸ on a row splits it into pattern rows (both high, one high, both
           low, about equal) that add up to the row.

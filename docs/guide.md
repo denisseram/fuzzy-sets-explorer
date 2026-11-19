@@ -175,8 +175,8 @@ For the reference element *x* and the selected row *T* (Full rows):
   memberships and metadata. Compact rows: a red tick across each strip.
 - **Additive mode**: the line still shows the inclusive minimum; a red band from `outsideMaximum` to `insideMinimum`
   spans the cells of *T*: its height is exactly `component(x, T)` (with *m'* in threshold mode).
-- **Profile in all rows** (next to the field): *x*'s curve and dashed line in every visible Full row where *x*
-  contributes.
+- **Open all its rows** (next to the field, on by default): every shown row where *x* contributes is Full (points
+  and violins, in any Rows setting, not dimmed), with *x*'s points, curve and dashed line. Off: only the selected row.
 
 Rules: the field offers only the contributors of the selected row in the active mode (and τ). No reference by
 default. When the row, mode, sets or τ change, the element is kept if it still contributes, otherwise cleared.

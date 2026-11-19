@@ -11,7 +11,7 @@ import {
 } from "../lib/upsetView";
 import { isPatternRow, PATTERN_CUT, PATTERN_EPS, PATTERN_OPEN_ALL_MAX, patternChildren, patternRows, type PatternRow } from "../lib/patterns";
 import { tipStyle } from "../lib/tip";
-import { violinCells, violinMaxOf } from "../lib/violin";
+import { indexOfSorted, violinCells, violinMaxOf } from "../lib/violin";
 import MiniHist from "./MiniHist";
 import Popover from "./Popover";
 import ThresholdSidebar from "./ThresholdSidebar";
@@ -78,7 +78,8 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());
   const [refX, setRefX] = useState<number | null>(null);
   const [refText, setRefText] = useState("");
-  const [profileAll, setProfileAll] = useState(false);
+  // with a reference element: every row it contributes to is Full and shows its points and profile
+  const [profileAll, setProfileAll] = useState(true);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [cut, setCut] = useState(PATTERN_CUT);
   const [eps, setEps] = useState(PATTERN_EPS);
@@ -256,6 +257,10 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
       membership: (i) => data.P[refX * data.L + i],
     };
   }, [selCombo, refX, contribSet, data, K, threshold, ds, cols, names, mode]);
+  const refRows = useMemo<ReadonlySet<string>>(
+    () => (profileAll && refMark && refX !== null ? new Set(sorted.filter((c) => indexOfSorted(c.contributors, refX) >= 0).map((c) => c.key)) : new Set()),
+    [profileAll, refMark, refX, sorted],
+  );
   const elemLabel = useCallback((x: number) => short(obsLabel(ds, data.src[x]), 24), [ds, data]);
   const clearRef = useCallback(() => (setRefX(null), setRefText("")), []);
   // a click on a point: that element becomes the reference (input kept in sync) and its row is selected; again: clear
@@ -534,8 +539,8 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
                     {refText && <button className="fu-link" aria-label="Clear the reference element" onClick={clearRef}>✕</button>}
                   </div>
                 </div>
-                <label className="fc-check" title="Draw the reference element's profile in every visible Full row where it contributes, not only in the selected row">
-                  <input type="checkbox" checked={profileAll} onChange={(e) => setProfileAll(e.target.checked)} /> Profile in all rows
+                <label className="fc-check" title="Show every row the reference element contributes to at Full detail (points and violins), with its points highlighted and its profile; off: only in the selected row">
+                  <input type="checkbox" checked={profileAll} onChange={(e) => setProfileAll(e.target.checked)} /> Open all its rows
                 </label>
                 {selCombo && (
                   <div className="fs-field" title="Lattice distance |T Δ S|: the number of sets added or removed">
@@ -581,7 +586,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
           <UpsetMatrix
             names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} compactStyle={compactStyle} fisheye={fisheye}
             N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} violinMax={violinMax} detail={detail} groupAgg={groupAgg} query={query}
-            values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll} open={open} onToggleOpen={onToggleOpen}
+            values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll} refRows={refRows} open={open} onToggleOpen={onToggleOpen}
             selected={selected} pinned={pinned} onPin={onPin} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}
             headHists={headHists} headMax={setHistMax} headTip={headTip} onHeaderDown={onHeaderDown} headRef={headRef}
             dropActive={!!drag?.moved && drag.kind === "add"} snapshots={snapshots} onRemoveSnapshot={onRemoveSnapshot} rank={rankView} ranking={ranking}
