@@ -6,7 +6,7 @@ import {
   autoFullRows, countEntries, horizon, layout, lodOf, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
 } from "../lib/upsetView";
 import { indexOfSorted, jitter, MAX_POINTS, pointsToDraw, profilePath, VIOLIN_STEPS, violinOf } from "../lib/violin";
-import { isPatternRow, ribbonGeometry, ribbonsOf, type PatternRow } from "../lib/patterns";
+import { isPatternRow, PATTERN_COUNT_MIN, ribbonGeometry, ribbonsOf, type PatternRow } from "../lib/patterns";
 import { HistBars } from "./MiniHist";
 
 /** Width of the column-header histograms (membership 0 left, 1 right) and the largest half-violin width (a count). */
@@ -79,7 +79,7 @@ export function Dot({ cx, cy, r = DOT_R, member, hole = 0, may = false }: { cx: 
 /** A set slot of a pattern row: high = filled disc, low = ring, in the pattern colour; equal and other: half-tone. */
 function PatDot({ cx, cy, r, pat, set }: { cx: number; cy: number; r: number; pat: PatternRow; set: number }) {
   const k = pat.pattern.kind;
-  if (k === "equal" || k === "other") return <circle cx={cx} cy={cy} r={r} fill="var(--row-c)" fillOpacity={0.55} />;
+  if (k === "equal" || k === "other" || k === "count") return <circle cx={cx} cy={cy} r={r} fill="var(--row-c)" fillOpacity={0.55} />;
   const high = k === "allHigh" || pat.pattern.high.includes(set);
   return high ? <circle cx={cx} cy={cy} r={r} fill="var(--row-c)" /> : <circle cx={cx} cy={cy} r={r - 0.9} fill="var(--panel)" stroke="var(--row-c)" strokeWidth={1.8} />;
 }
@@ -357,10 +357,12 @@ function UpsetMatrix(p: MatrixProps) {
     const name = rowName(c.sets);
     const cxs = cols.flatMap((s, ci) => (c.sets.includes(s) ? [colX(ci) + CIRCLE_X] : []));
     const share = pat ? `${((100 * n) / Math.max(1, pat.parentCount)).toFixed(0)} %` : "";
-    const canOpen = !pat && c.sets.length > 1 && n > 0;
+    // rows of 2+ sets open into pattern rows; count groups ("High in 3 of 10") open into their patterns
+    const canOpen = n > 0 && (pat ? pat.pattern.openable : c.sets.length > 1);
+    const sub = pat?.pattern.depth === 2;
     const barTip = (ev: React.MouseEvent) => tip(ev, pat ? `${name} · ${pat.pattern.label}` : name, pat ? [
       modeName,
-      `contributors: ${n} of ${pat.parentCount} (${share})`,
+      `contributors: ${n} of ${pat.parentCount} (${share}${sub ? " of the group" : ""})`,
       `membership mass: ${fmt(c.mass)}${n ? ` (mean ${fmt(c.mass / n)} per contributor)` : ""}`,
     ] : [
       modeName,
@@ -379,7 +381,7 @@ function UpsetMatrix(p: MatrixProps) {
         onMouseEnter={p.fisheye ? () => (clearTimeout(hoverTimer.current), (hoverTimer.current = window.setTimeout(() => setHoverId(it.id), 150))) : undefined}
       >
         <rect x={PAD} y={0} width={W - PAD} height={h} fill={bg} className="fu-row-bg" />
-        {pat && <rect x={PAD} y={0} width={W - PAD} height={h} fill="var(--row-c)" fillOpacity={0.06} pointerEvents="none" />}
+        {pat && <rect x={PAD} y={0} width={W - PAD} height={h} fill="var(--row-c)" fillOpacity={sub ? 0.03 : 0.07} pointerEvents="none" />}
         {h >= 9 && <line x1={PAD} x2={colX(k)} y1={h} y2={h} stroke="var(--rule-2)" />}
         {pat && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--row-c)" />}
         {!pat && p.query?.matches.has(c.key) && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--accent)" />}
@@ -387,7 +389,11 @@ function UpsetMatrix(p: MatrixProps) {
           <g
             className="fu-tg" role="button" aria-expanded={p.open.has(c.key)} aria-label={`${p.open.has(c.key) ? "Close" : "Open"} the patterns of ${name}`}
             onClick={(ev) => (ev.stopPropagation(), p.onToggleOpen(c.key))}
-            onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, name, [p.open.has(c.key) ? "click: close the pattern rows" : "click: split by pattern (both high, one high, both low, about equal)"]))}
+            onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, pat ? `${name} · ${pat.pattern.label}` : name, [
+              p.open.has(c.key) ? "click: close the pattern rows"
+                : pat ? "click: show its patterns (which sets are high)"
+                  : c.sets.length >= PATTERN_COUNT_MIN ? "click: split by the number of high sets, then by pattern" : "click: split by pattern (both high, one high, both low, about equal)",
+            ]))}
           >
             <rect x={0} y={0} width={PAD - 8} height={h} fill="transparent" />
             <text x={3} y={cy + 4}>{p.open.has(c.key) ? "▾" : "▸"}</text>
@@ -427,7 +433,7 @@ function UpsetMatrix(p: MatrixProps) {
         </g>
         {isSel && !pat && reference && lod === "compact" && <text className="fu-ref-lbl" x={colX(k) + 4} y={cy + 3.5}>{reference.label}</text>}
         {pat && lod !== "minimal" && (
-          <text className="fu-pat-lbl" x={colX(k) + 4} y={cy + 3.5}>{`${pat.pattern.label} — ${n.toLocaleString("en-US")} (${share})`}</text>
+          <text className="fu-pat-lbl" x={colX(k) + 4} y={cy + 3.5}>{`${sub ? "↳ " : ""}${pat.pattern.label} — ${n.toLocaleString("en-US")} (${share})`}</text>
         )}
       </Moving>
     );

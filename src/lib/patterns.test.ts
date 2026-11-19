@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { additiveCombos, histogram, inclusiveCombos, validateMemberships, type Memberships, type Threshold } from "./fuzzyDecomposition";
-import { classify, MAX_PATTERN_ROWS, patternRows, ribbonCounts, ribbonGeometry } from "./patterns";
+import { classify, countColor, MAX_PATTERN_ROWS, patternChildren, patternRows, ribbonCounts, ribbonGeometry } from "./patterns";
 import { autoFullRows, displayEntries, layout } from "./upsetView";
 import { renderMatrix } from "./testPlot";
 
@@ -64,7 +64,7 @@ describe("pattern rows", () => {
   });
   it("partition: disjoint, cover the row, masses add up (200 random datasets, both modes, τ and per-set τ)", () => {
     for (let t = 0; t < 200; t++) {
-      const L = 2 + (t % 4);
+      const L = 2 + (t % 6);
       const d = data(Array.from({ length: 5 + Math.floor(rnd() * 40) }, (_, x) => [`x${x}`, ...Array.from({ length: L }, value)] as [string, ...number[]]));
       const K = Array.from({ length: L }, (_, i) => i);
       const kind = t % 3;
@@ -78,7 +78,13 @@ describe("pattern rows", () => {
           const all = rows.flatMap((r) => r.contributors).sort((a, b) => a - b);
           expect(all, `${mode} ${c.key} #${t}`).toEqual(c.contributors);
           expect(Math.abs(rows.reduce((s, r) => s + r.mass, 0) - c.mass), `${mode} ${c.key} #${t}`).toBeLessThan(1e-9);
-          for (const r of rows) expect(r.contributors).toEqual([...r.contributors].sort((a, b) => a - b));
+          for (const r of rows) {
+            expect(r.contributors).toEqual([...r.contributors].sort((a, b) => a - b));
+            const kids = patternChildren(d, r, K, th, mode, opts);
+            if (!kids.length) continue;
+            expect(kids.flatMap((q) => q.contributors).sort((a, b) => a - b)).toEqual(r.contributors);
+            expect(Math.abs(kids.reduce((s, q) => s + q.mass, 0) - r.mass)).toBeLessThan(1e-9);
+          }
         }
     }
   });
@@ -93,23 +99,49 @@ describe("pattern rows", () => {
       "All high", "A high · B high · C low", "A high · B low · C low", "A low · B low · C high", "All low", "Equal, high", "Equal, middle", "Equal, low",
     ]);
   });
-  it(`at most ${MAX_PATTERN_ROWS} rows: the smallest mixed patterns merge into "Other mixed"`, () => {
-    // 6 sets: every contributor has a distinct mixed pattern (high in a different pair or triple of sets)
+  it("rows of 4+ sets: count groups from all high to none, colours by count, groups open into their patterns", () => {
+    // 6 sets; mask m: high (0.6 / 0.9 alternating) in the sets of m, low (0.1 / 0.35) elsewhere, so no element is
+    // "equal"; (m % 5) + 1 elements per mask
     const rows: [string, ...number[]][] = [];
     let n = 0;
-    for (let mask = 1; mask < 63; mask++) for (let r = 0; r <= (mask % 5); r++) rows.push([`m${n++}`, ...Array.from({ length: 6 }, (_, i) => (mask & (1 << i) ? 0.9 : 0.1))]);
+    const hi = (i: number) => (i % 2 ? 0.9 : 0.6), lo = (i: number) => (i % 2 ? 0.35 : 0.1);
+    for (let mask = 0; mask < 64; mask++) for (let r = 0; r <= mask % 5; r++) rows.push([`m${n++}`, ...Array.from({ length: 6 }, (_, i) => (mask & (1 << i) ? hi(i) : lo(i)))]);
+    rows.push(["eq", 0.5, 0.5, 0.5, 0.55, 0.5, 0.5]);
     const d = data(rows);
     const K = [0, 1, 2, 3, 4, 5];
-    const all = inclusiveCombos(d, K).combos.find((c) => c.sets.length === 6)!;
-    const pr = patternRows(d, all, K, null, "inclusive", { names: NAMES, cols: K });
-    expect(pr).toHaveLength(MAX_PATTERN_ROWS);
-    const other = pr.find((r) => r.pattern.kind === "other")!;
-    expect(other.pattern.label).toMatch(/^Other mixed \(\d+ patterns\)$/);
-    expect(pr.flatMap((r) => r.contributors).sort((a, b) => a - b)).toEqual(all.contributors);
-    // the kept mixed patterns are at least as large as every merged one
-    const kept = pr.filter((r) => r.pattern.kind === "mixed").map((r) => r.contributors.length);
-    expect(kept).toEqual(new Array(MAX_PATTERN_ROWS - 1).fill(5)); // sizes are 1–5: 11 kept, all of the largest size
-    expect(pr[0].pattern.label).toMatch(/^high in /);
+    const row = inclusiveCombos(d, K).combos.find((c) => c.sets.length === 6)!;
+    const o = { names: NAMES, cols: K };
+    const top = patternRows(d, row, K, null, "inclusive", o);
+    expect(top.map((r) => r.pattern.label)).toEqual([
+      "High in all 6", "High in 5 of 6 (6 patterns)", "High in 4 of 6 (15 patterns)", "High in 3 of 6 (20 patterns)",
+      "High in 2 of 6 (15 patterns)", "High in 1 of 6 (6 patterns)", "High in none (all low)", "Equal, middle",
+    ]);
+    expect(top.flatMap((r) => r.contributors).sort((a, b) => a - b)).toEqual(row.contributors);
+    expect(top.map((r) => r.pattern.openable)).toEqual([false, true, true, true, true, true, false, false]);
+    expect(top[0].pattern.color).toBe(countColor(6, 6));
+    expect(top[3].pattern.color).toBe(countColor(3, 6));
+    // the colour follows the count: the same without the all-high and 5-of-6 elements
+    const fewer = data(rows.filter((r) => r.slice(1).filter((v) => (v as number) >= 0.5).length < 5));
+    const fr = patternRows(fewer, inclusiveCombos(fewer, K).combos.find((c) => c.sets.length === 6)!, K, null, "inclusive", o);
+    expect(fr.find((r) => r.pattern.count === 3)!.pattern.color).toBe(countColor(3, 6));
+    // a group opens into its patterns: they partition it; at most 12, the smallest merged into "Other"
+    const three = top[3];
+    const kids = patternChildren(d, three, K, null, "inclusive", o);
+    expect(kids).toHaveLength(MAX_PATTERN_ROWS);
+    expect(kids.flatMap((r) => r.contributors).sort((a, b) => a - b)).toEqual(three.contributors);
+    expect(Math.abs(kids.reduce((s, r) => s + r.mass, 0) - three.mass)).toBeLessThan(1e-9);
+    expect(kids[kids.length - 1].pattern.label).toBe("Other (9 patterns)");
+    expect(kids[0].pattern.label).toMatch(/^High in [A-F], [A-F], [A-F]$/);
+    expect(kids.every((r) => r.parent === row.key && r.key.startsWith(`${three.key}|`) && r.pattern.depth === 2 && r.pattern.color === three.pattern.color)).toBe(true);
+    // kept patterns are the largest: of the 20 three-set patterns (sizes (mask % 5) + 1), the 11 kept are at least as
+    // large as every merged one
+    const all3 = Array.from({ length: 64 }, (_, m) => m).filter((m) => [0, 1, 2, 3, 4, 5].filter((i) => m & (1 << i)).length === 3).map((m) => (m % 5) + 1);
+    const desc = all3.sort((a, b) => b - a);
+    expect(kids.slice(0, -1).map((r) => r.contributors.length).sort((a, b) => b - a)).toEqual(desc.slice(0, 11));
+    expect(kids[kids.length - 1].contributors).toHaveLength(desc.slice(11).reduce((s, v) => s + v, 0));
+    // no children for rows without groups
+    expect(patternChildren(d, top[0], K, null, "inclusive", o)).toEqual([]);
+    expect(patternChildren(d, kids[0], K, null, "inclusive", o)).toEqual([]);
   });
 });
 
@@ -154,6 +186,21 @@ describe("pattern rows in the plot", () => {
     const hidden = displayEntries(rows, null, new Set(), (c) => c.key !== "0,1", { open: new Set(["0,1"]), of });
     const items = layout(hidden, { rowH: 20, headerH: 18, fisheye: null }).items;
     expect(items.some((it) => it.kind === "row" && (it.combo.key === "0,1" || it.combo.key.startsWith("0,1|")))).toBe(false);
+  });
+  it("nested: an open count group is followed by its patterns, all owned by the row", () => {
+    const d = data([["a", 0.9, 0.8, 0.1, 0.2], ["b", 0.1, 0.9, 0.7, 0.2], ["c", 0.6, 0.2, 0.9, 0.3], ["d", 0.2, 0.3, 0.1, 0.35]]);
+    const K = [0, 1, 2, 3];
+    const rows4 = inclusiveCombos(d, K).combos;
+    const row = rows4.find((c) => c.sets.length === 4)!;
+    const o = { names: NAMES, cols: K };
+    const of = (c: (typeof rows4)[number]) => ("pattern" in c ? patternChildren(d, c as never, K, null, "inclusive", o) : patternRows(d, c, K, null, "inclusive", o));
+    const top = patternRows(d, row, K, null, "inclusive", o);
+    expect(top.map((r) => r.pattern.label)).toEqual(["High in 2 of 4 (3 patterns)", "High in none (all low)"]);
+    const e = displayEntries(rows4, null, new Set(), null, { open: new Set([row.key, top[0].key]), of });
+    const at = e.findIndex((x) => x.id === row.key);
+    const next = e.slice(at + 1, at + 6) as { id: string; parent?: string }[];
+    expect(next.map((x) => x.id)).toEqual([top[0].key, `${top[0].key}|H:0,1`, `${top[0].key}|H:0,2`, `${top[0].key}|H:1,2`, top[1].key]);
+    expect(next.every((x) => x.parent === row.key)).toBe(true);
   });
   it("renders labels, pattern colours and ribbons", () => {
     const svg = renderMatrix(fx, ["A", "B", "C"], "inclusive", "0,1", null, false, new Set(["0,1"]));

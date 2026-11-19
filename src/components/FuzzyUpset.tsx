@@ -9,7 +9,7 @@ import {
   applyFilters, describeClause, describeQuery, displayEntries, groupRows, neighbourhood, pickReference, queryMatches, rankChanges, referenceLabel, sortRows,
   type Clause, type Group, type GroupBy, type LodSetting, type QState, type SortBy,
 } from "../lib/upsetView";
-import { PATTERN_CUT, PATTERN_EPS, PATTERN_OPEN_ALL_MAX, patternRows, type PatternRow } from "../lib/patterns";
+import { isPatternRow, PATTERN_CUT, PATTERN_EPS, PATTERN_OPEN_ALL_MAX, patternChildren, patternRows, type PatternRow } from "../lib/patterns";
 import { tipStyle } from "../lib/tip";
 import MiniHist from "./MiniHist";
 import Popover from "./Popover";
@@ -132,7 +132,8 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const patternCache = useMemo(() => new Map<string, PatternRow[]>(), [all, cut, eps, threshold, K, cols, names]); // eslint-disable-line react-hooks/exhaustive-deps
   const patternsOf = useCallback((c: Combo) => {
     let r = patternCache.get(c.key);
-    if (!r) patternCache.set(c.key, (r = patternRows(data, c, K, threshold, mode, { cut, eps, names, cols })));
+    const o = { cut, eps, names, cols };
+    if (!r) patternCache.set(c.key, (r = isPatternRow(c) ? patternChildren(data, c, K, threshold, mode, o) : patternRows(data, c, K, threshold, mode, o)));
     return r;
   }, [patternCache, data, K, threshold, mode, cut, eps, names, cols]);
 

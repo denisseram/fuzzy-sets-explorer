@@ -199,10 +199,18 @@ one pattern:
 
 - **Equal**: max − min of its memberships in the row's sets ≤ ε; then **Equal, high** (mean ≥ c + 0.1), **Equal,
   low** (mean < c − 0.1) or **Equal, middle**.
-- Otherwise by which sets reach the cut: **Both / All high**, a **mixed** pattern (e.g. "Comedy high · Drama low";
-  with more than 3 sets "high in A, B; low in the others"), or **Both / All low**.
-- Order: all high, mixed (more high sets first, then column order), all low, equal high, middle, low. Empty patterns
-  are omitted; above 12 rows the smallest mixed patterns merge into "Other mixed (n patterns)".
+- Otherwise by which sets reach the cut: **Both / All high**, a **mixed** pattern (e.g. "Comedy high · Drama low"),
+  or **Both / All low**.
+- Rows of 2 or 3 sets: all high, mixed (more high sets first, then column order), all low, equal high, middle, low.
+  Empty patterns are omitted; above 12 rows the smallest mixed patterns merge into "Other mixed (n patterns)".
+- **Rows of 4 or more sets** first split by the **number** of high sets: "High in all 10", "High in 9 of 10", …,
+  "High in 1 of 10", "High in none (all low)", then the equal rows. Every contributor lands in one of them (no
+  "Other"), so the split stays readable however many patterns exist: in MovieLens, the 10-set row of the 10 largest
+  genres has 184 distinct patterns but only 8 count groups (none 74, one 433, two 448, three 309, four 173, five
+  46, six 15, seven 2). A count group with more than one pattern has its own ▸ and opens into its patterns ("↳ High
+  in Drama, Comedy", in the group's colour, as a share of the group); at most 12, the smallest merged into "Other (n
+  patterns)". Count groups are coloured by their count, one hue from light (none) to dark (all high), so a group
+  keeps its colour whatever other groups exist.
 
 Pattern rows partition the row: their contributors add up to the row's, and their masses (the sum of each
 contributor's value in the row: the inclusive minimum of m', or the component) add up to the row's mass. They use the
@@ -255,6 +263,7 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 - Navy (#282C5F): bars, histograms, violins (fill 14 %) and points (55 %).
 - Patterns (validated as adjacent pairs, every pattern row labelled): all high #eb6834, mixed #2a78d6, #1baf7a,
   #eda100 (further mixed patterns grey #9a9894), all low #6250d6, equal high / middle / low #a8325f, #d55181, #e99ab8.
+  Count groups (4+ sets): #c2541f mixed with the panel from 35 % (no high set) to 100 % (all high).
   Ribbons: navy at 18 % in rows, the pattern colour at 35 % in pattern rows. Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
   Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference profile, line, band, label and τ marks.
 - Compact strips: ink at opacity 0.1 + 0.85 · count / max (grayscale on the shared count scale).

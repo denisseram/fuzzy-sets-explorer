@@ -40,6 +40,8 @@
   --pat-eq-mid: #d55181;
   --pat-eq-low: #e99ab8;
   --pat-other: #9a9894;
+  /* count groups (rows of 4+ sets): one hue, mixed with the panel from 35 % (no high set) to 100 % (all high) */
+  --pat-count: #c2541f;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }

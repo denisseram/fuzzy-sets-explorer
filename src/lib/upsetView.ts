@@ -239,7 +239,14 @@ export function displayEntries(
     for (const c of rs) {
       const hidden = keep && !keep(c) ? "neighbourhood" : null;
       out.push({ kind: "row", id: `${pre}${c.key}`, combo: c, hidden });
-      if (patterns?.open.has(c.key)) for (const p of patterns.of(c)) out.push({ kind: "row", id: `${pre}${p.key}`, combo: p, hidden, parent: c.key });
+      if (patterns?.open.has(c.key)) addPatterns(c, pre, hidden, c.key);
+    }
+  };
+  // pattern rows, and the patterns of an open count group under it (patterns.of returns [] below that)
+  const addPatterns = (c: Combo, pre: string, hidden: HideReason | null, root: string) => {
+    for (const p of patterns!.of(c)) {
+      out.push({ kind: "row", id: `${pre}${p.key}`, combo: p, hidden, parent: root });
+      if (patterns!.open.has(p.key)) addPatterns(p, pre, hidden, root);
     }
   };
   const addGroup = (g: Group, depth: number) => {
