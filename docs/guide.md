@@ -228,6 +228,10 @@ Fixture, inclusive A ∩ B: **A low · B high** (E2, mass 0.2) and **Equal, high
 
 - No row is selected initially. Clicking a row (bars or matrix) selects it; clicking it again deselects it. The
   selected row is tinted, its connector is thicker, and the other rows fade.
+- Back to the view without a selection: **Clear selection** (next to "Showing …", while a row or a reference element
+  is selected) clears the selected row, the reference element and the neighbourhood at once. **Escape** does it one
+  step at a time: first the reference element, then the selected row with its neighbourhood. Pinned rows stay;
+  **Unpin all** (next to it, while rows are pinned) unpins them.
 - The selected row persists across mode and τ changes; it is cleared when one of its sets is deselected.
 - Everything is recalculated when the selected sets, the mode or τ change.
 - Tooltips: bars (contributors, mass, mean), violins ("A in A ∩ B: 1,240 contributors" and the count of the 0.2 bin

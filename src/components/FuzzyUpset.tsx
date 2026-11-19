@@ -263,6 +263,8 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   );
   const elemLabel = useCallback((x: number) => short(obsLabel(ds, data.src[x]), 24), [ds, data]);
   const clearRef = useCallback(() => (setRefX(null), setRefText("")), []);
+  // back to the view without a selection: no selected row, reference element or neighbourhood (pinned rows stay)
+  const clearSelection = useCallback(() => (clearRef(), setSelected(null), setHop(0)), [clearRef]);
   // a click on a point: that element becomes the reference (input kept in sync) and its row is selected; again: clear
   const onPick = useCallback((key: string, x: number) => {
     const next = pickReference({ selected, refX }, key, x);
@@ -271,12 +273,17 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
     setRefText(next.refX === null ? "" : optLabel(next.refX));
   }, [refX, selected, optLabel]);
   useEffect(() => {
-    if (refX === null) return;
-    // Escape clears the reference element, unless it closes an open popover
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector("[role=dialog]") && clearRef();
+    if (refX === null && selected === null) return;
+    // Escape, one step at a time: first the reference element, then the selected row (and its neighbourhood); not
+    // while it closes an open popover
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector("[role=dialog]")) return;
+      if (refX !== null) clearRef();
+      else clearSelection();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [refX, clearRef]);
+  }, [refX, selected, clearRef, clearSelection]);
 
   // ---- set selection: shelf chips and header drag ------------------------------------------------------------------
 
@@ -380,9 +387,21 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
 
   return (
     <div className="fu">
-      <p className="fu-showing" title={showingWhy || undefined}>
-        {showing}{result.stoppedAt !== null && <span className="fu-warn"> · enumeration stopped before degree {result.stoppedAt}: raise the minimum mass or lower the maximum degree</span>}
-      </p>
+      <div className="fu-top">
+        <p className="fu-showing" title={showingWhy || undefined}>
+          {showing}{result.stoppedAt !== null && <span className="fu-warn"> · enumeration stopped before degree {result.stoppedAt}: raise the minimum mass or lower the maximum degree</span>}
+        </p>
+        {(selected !== null || refX !== null) && (
+          <button className="fc-btn fu-clear" onClick={clearSelection} title="Clear the selected row, the reference element and the neighbourhood (Esc: one step at a time)">
+            <span aria-hidden="true">✕</span> Clear selection
+          </button>
+        )}
+        {pinned.size > 0 && (
+          <button className="fc-btn fu-clear" onClick={() => setPinned(new Set())} title="Unpin every pinned row">
+            <span aria-hidden="true">✕</span> Unpin all{pinnedShown ? <span className="fc-badge">{pinnedShown}</span> : null}
+          </button>
+        )}
+      </div>
       {note && <p className="fu-excl" title={note.detail}>⚠ {note.text}</p>}
       <div className="fu-body">
         <aside className={`fu-side${sideOpen ? " open" : ""}`} aria-label="Options">

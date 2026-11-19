@@ -3,7 +3,10 @@
 .col-upset .panel-title { display: flex; align-items: center; gap: 6px; }
 .fu { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 /* "Showing 37 of 412 nonzero combinations", under the plot title */
-.fu-showing { margin: 0 0 2px; font-size: 11px; color: var(--ink-2); cursor: default; }
+.fu-showing { margin: 0; font-size: 11px; color: var(--ink-2); cursor: default; }
+/* the "Showing …" line with the reset buttons (only while there is something to reset) */
+.fu-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 22px; margin: 0 0 4px; }
+.fu-clear { height: 20px; font-size: 10.5px; padding: 0 7px; gap: 4px; }
 .fu-warn { color: #8A4B00; }
 
 /* Controls (in the options panel): small uppercase labels */
