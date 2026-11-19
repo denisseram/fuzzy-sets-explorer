@@ -274,7 +274,7 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 - Rank changes: green #2E8540 (moved up), red #B91C1C (moved down); stubs #D5D7DD.
 - Rows: Full 86 px (Auto: 80–86; plot area 56 px over a 24 px circle strip), Compact 24 px (Auto: 12–79), Minimal
   9 px (Auto: 6–11). Group headers 18–22 px, stubs 5 px (a 3 px line). Cells 116 px: 22 px jitter strip, axis, violin
-  up to 72 px. Compact strips 16 px wide. Circles of radius 6.5 px (smaller in short rows).
+  up to 72 px. Compact half violins and strips 16 px wide. Circles of radius 6.5 px (smaller in short rows).
 
 ## 10. Caveats
 
@@ -354,9 +354,11 @@ Auto (default) | Full | Compact | Minimal. Auto keeps the selected row, every ro
 pattern rows, and the fish-eye focus rows Full. The other rows get the largest height (at most 86 px) at which all
 rows fit in the plot's visible height, never below 6 px, computed as if no row were open: opening a row adds Full rows
 and the plot scrolls, but the other rows keep their height;
-the level follows from the height: **Full** (≥ 80 px) points, half violins and profiles; **Compact** (12–79 px) a
-vertical strip of the 5 bins stacked bottom ([0, 0.2)) to top as grayscale cells (darker = more elements; the
-darkest cell is the largest bin over all filtered rows, the same rows that set the violin scale); **Minimal**
+the level follows from the height: **Full** (≥ 80 px) points, half violins and profiles; **Compact** (12–79 px) per
+cell, set by **Compact cells**: a small half violin (default; 16 px wide, transparent so the row's connector shows
+through, its width scaled per cell: shape only) or a vertical strip of the 5 bins stacked bottom ([0, 0.2)) to top as
+grayscale cells (darker = more elements; the darkest cell is the largest bin over all filtered rows, the same rows
+that set the violin scale); **Minimal**
 (< 12 px) circles and connector only. The reference becomes a red tick across the strip (Compact) and is hidden
 (Minimal); rings stay rings. Only the rows near the visible part are drawn.
 

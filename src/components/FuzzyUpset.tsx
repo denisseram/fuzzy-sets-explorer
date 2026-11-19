@@ -27,7 +27,7 @@ const SORTS: [SortBy, string][] = [["degree", "Degree"], ["mass", "Membership ma
 const GROUPS: [GroupBy, string][] = [["none", "None"], ["degree", "Degree"], ["set", "Set"], ["pairs", "Pairs"], ["setPairs", "Set → pairs"]];
 const ORDERS: [SetOrder, string][] = [["input", "Input order"], ["sigma", "Sigma-count"], ["similarity", "Similarity"]];
 const LODS: [LodSetting, string][] = [["auto", "Auto"], ["full", "Full"], ["compact", "Compact"], ["minimal", "Minimal"]];
-const COMPACT_STYLES: [CompactStyle, string][] = [["strip", "Grayscale strip"], ["violin", "Half violin"]];
+const COMPACT_STYLES: [CompactStyle, string][] = [["violin", "Half violin"], ["strip", "Grayscale strip"]];
 const NEXT_Q: Record<QState, QState> = { may: "must", must: "not", not: "may" };
 
 /** Metadata of one observation (categories and numerical attributes), for tooltips. */
@@ -94,7 +94,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [sortBy, setSortBy] = useState<SortBy>("degree");
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [lod, setLod] = useState<LodSetting>("auto");
-  const [compactStyle, setCompactStyle] = useState<CompactStyle>("strip");
+  const [compactStyle, setCompactStyle] = useState<CompactStyle>("violin");
   const [fisheye, setFisheye] = useState(false);
   const [sideOpen, setSideOpen] = useState(false);
   const [hop, setHop] = useState(0);
