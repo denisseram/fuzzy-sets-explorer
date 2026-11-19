@@ -3,7 +3,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type React
 import { binLabel, BIN_EDGES, N_BINS, tauOf, type Combo, type Mode, type RowDetail, type RowValues, type Threshold } from "../lib/fuzzyDecomposition";
 import { holeRadius } from "../lib/fuzzyUpset";
 import {
-  autoFullRows, countEntries, horizon, layout, lodOf, MAX_WRAPS, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
+  autoFullRows, autoRowHeight, countEntries, horizon, layout, lodOf, MAX_WRAPS, rankChangeIntensity, rankChanges, ROW_FULL, stubText, type Entry, type Group, type LodSetting, type Placed,
 } from "../lib/upsetView";
 import { indexOfSorted, jitter, MAX_POINTS, pointsToDraw, profilePath, VIOLIN_STEPS, violinOf } from "../lib/violin";
 import { isPatternRow, PATTERN_COUNT_MIN, ribbonGeometry, ribbonsOf, type PatternRow } from "../lib/patterns";
@@ -314,9 +314,11 @@ function UpsetMatrix(p: MatrixProps) {
   const avail = Math.max(120, vp.h - headTotal - 4);
   const hH0 = headerH(ROW_FULL);
   const focus = p.fisheye ? (hoverId ?? p.entries.find((e) => e.kind === "row" && e.combo.key === selected)?.id ?? null) : null;
-  // Auto: the selected row and the fish-eye focus rows are always Full; the others take the largest level that fits
-  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus) : new Set<string>()), [p.lod, p.entries, selected, focus]);
-  const rowH = rowHeight(p.lod, counts.rows, avail - counts.headers * hH0 - counts.stubs * 5, fullIds.size);
+  // Auto: the selected row, open rows with their pattern rows and the fish-eye focus rows are always Full; the others
+  // take the largest level that fits (open rows do not take height from them)
+  const baseFull = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus) : new Set<string>()), [p.lod, p.entries, selected, focus]);
+  const fullIds = useMemo(() => (p.lod === "auto" ? autoFullRows(p.entries, selected, focus, p.open) : baseFull), [p.lod, p.entries, selected, focus, p.open, baseFull]);
+  const rowH = autoRowHeight(p.lod, p.entries, avail - counts.headers * hH0 - counts.stubs * 5, baseFull);
   const hH = headerH(rowH);
   const lay = useMemo(
     () => layout(p.entries, { rowH, headerH: hH, fisheye: p.fisheye ? { focus, avail } : null, full: fullIds }),

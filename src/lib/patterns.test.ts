@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { additiveCombos, histogram, inclusiveCombos, validateMemberships, type Memberships, type Threshold } from "./fuzzyDecomposition";
 import { classify, countColor, MAX_PATTERN_ROWS, patternChildren, patternRows, ribbonCounts, ribbonGeometry } from "./patterns";
-import { autoFullRows, displayEntries, layout } from "./upsetView";
+import { autoFullRows, autoRowHeight, displayEntries, layout, lodOf, rowHeight } from "./upsetView";
 import { renderMatrix } from "./testPlot";
 
 const A = 0, B = 1, C = 2;
@@ -186,6 +186,22 @@ describe("pattern rows in the plot", () => {
     const hidden = displayEntries(rows, null, new Set(), (c) => c.key !== "0,1", { open: new Set(["0,1"]), of });
     const items = layout(hidden, { rowH: 20, headerH: 18, fisheye: null }).items;
     expect(items.some((it) => it.kind === "row" && (it.combo.key === "0,1" || it.combo.key.startsWith("0,1|")))).toBe(false);
+  });
+  it("Auto: open rows and their pattern rows are Full, and opening does not make the other rows shorter", () => {
+    const closed = displayEntries(rows, null, new Set(), null, { open: new Set(), of });
+    const h0 = autoRowHeight("auto", closed, 200, autoFullRows(closed, null, null));
+    const open = new Set(["0,1", "0,2"]);
+    const e = displayEntries(rows, null, new Set(), null, { open, of });
+    const full = autoFullRows(e, null, null, open);
+    const opened = e.filter((x) => x.kind === "row" && (x.parent !== undefined || open.has(x.combo.key))).map((x) => x.id);
+    expect(opened.length).toBeGreaterThan(2);
+    expect([...full].sort()).toEqual(opened.sort());
+    const h = autoRowHeight("auto", e, 200, autoFullRows(e, null, null));
+    expect(h).toBe(h0);
+    const items = layout(e, { rowH: h, headerH: 18, fisheye: null, full }).items;
+    for (const it of items) if (it.kind === "row") expect(lodOf(it.h)).toBe(full.has(it.id) ? "full" : lodOf(h0));
+    // fixed settings are unchanged
+    expect(autoRowHeight("compact", e, 200, new Set())).toBe(rowHeight("compact", 0, 0));
   });
   it("nested: an open count group is followed by its patterns, all owned by the row", () => {
     const d = data([["a", 0.9, 0.8, 0.1, 0.2], ["b", 0.1, 0.9, 0.7, 0.2], ["c", 0.6, 0.2, 0.9, 0.3], ["d", 0.2, 0.3, 0.1, 0.35]]);

@@ -147,17 +147,38 @@ export function rowHeight(setting: LodSetting, n: number, avail: number, nFull =
   return Math.max(ROW_MIN, Math.min(ROW_FULL, Math.floor((avail - nFull * ROW_FULL) / others)));
 }
 
+/** A shown row opened into its pattern rows, or one of those pattern rows. */
+const isOpenRow = (e: Extract<Entry, { kind: "row" }>, open: ReadonlySet<string>) => e.parent !== undefined || open.has(e.combo.key);
+
 /**
  * Ids of the shown rows that Auto keeps at Full height: every entry of the selected row (rows repeat across groups)
- * and its pattern rows, and, with a fish-eye focus, the focus and `radius` shown rows on each side.
+ * and its pattern rows; every row opened into pattern rows and its pattern rows (so their distributions stay visible);
+ * and, with a fish-eye focus, the focus and `radius` shown rows on each side.
  */
-export function autoFullRows(entries: readonly Entry[], selected: string | null, focus: string | null, radius = FISHEYE_RADIUS): Set<string> {
+export function autoFullRows(
+  entries: readonly Entry[], selected: string | null, focus: string | null, open: ReadonlySet<string> = new Set(), radius = FISHEYE_RADIUS,
+): Set<string> {
   const out = new Set<string>();
   const shown = entries.filter((e): e is Extract<Entry, { kind: "row" }> => e.kind === "row" && !e.hidden);
-  for (const e of shown) if (selected !== null && (e.combo.key === selected || e.parent === selected)) out.add(e.id);
+  for (const e of shown) if ((selected !== null && (e.combo.key === selected || e.parent === selected)) || isOpenRow(e, open)) out.add(e.id);
   const f = focus === null ? -1 : shown.findIndex((e) => e.id === focus);
   if (f >= 0) for (const e of shown.slice(Math.max(0, f - radius), f + radius + 1)) out.add(e.id);
   return out;
+}
+
+/**
+ * Height of the rows that are not Full under Auto, computed as if no row were open: pattern rows are left out and
+ * `baseFull` holds the Full rows without the open ones (`autoFullRows` without `open`). Opening a row then adds Full
+ * rows (the plot scrolls) and leaves the other rows' height unchanged.
+ */
+export function autoRowHeight(setting: LodSetting, entries: readonly Entry[], avail: number, baseFull: ReadonlySet<string>): number {
+  let n = 0, nFull = 0;
+  for (const e of entries) {
+    if (e.kind !== "row" || e.hidden || e.parent !== undefined) continue;
+    n++;
+    if (baseFull.has(e.id)) nFull++;
+  }
+  return rowHeight(setting, n, avail, nFull);
 }
 
 // ---- reference element ---------------------------------------------------------------------------------------------

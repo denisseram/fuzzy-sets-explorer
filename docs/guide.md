@@ -350,8 +350,10 @@ that pass the filters.
 
 ### 11.5 Level of detail (Rows)
 
-Auto (default) | Full | Compact | Minimal. Auto keeps the selected row and the fish-eye focus rows Full and gives the
-other rows the largest height (at most 86 px) at which all rows fit in the plot's visible height, never below 6 px;
+Auto (default) | Full | Compact | Minimal. Auto keeps the selected row, every row opened into pattern rows (▸) with its
+pattern rows, and the fish-eye focus rows Full. The other rows get the largest height (at most 86 px) at which all
+rows fit in the plot's visible height, never below 6 px, computed as if no row were open: opening a row adds Full rows
+and the plot scrolls, but the other rows keep their height;
 the level follows from the height: **Full** (≥ 80 px) points, half violins and profiles; **Compact** (12–79 px) a
 vertical strip of the 5 bins stacked bottom ([0, 0.2)) to top as grayscale cells (darker = more elements; the
 darkest cell is the largest bin over all filtered rows, the same rows that set the violin scale); **Minimal**
