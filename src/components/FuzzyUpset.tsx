@@ -9,6 +9,7 @@ import {
   applyFilters, describeClause, describeQuery, displayEntries, groupRows, neighbourhood, pickReference, queryMatches, rankChanges, referenceLabel, sortRows,
   type Clause, type Group, type GroupBy, type LodSetting, type QState, type SortBy,
 } from "../lib/upsetView";
+import { PATTERN_CUT, PATTERN_EPS, PATTERN_OPEN_ALL_MAX, patternRows, type PatternRow } from "../lib/patterns";
 import { tipStyle } from "../lib/tip";
 import MiniHist from "./MiniHist";
 import Popover from "./Popover";
@@ -74,6 +75,9 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [refX, setRefX] = useState<number | null>(null);
   const [refText, setRefText] = useState("");
   const [profileAll, setProfileAll] = useState(false);
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const [cut, setCut] = useState(PATTERN_CUT);
+  const [eps, setEps] = useState(PATTERN_EPS);
   const [hover, setHover] = useState<Hover | null>(null);
   const [showEmpty, setShowEmpty] = useState(false);
   const [degLo, setDegLo] = useState<number | null>(null);
@@ -124,8 +128,16 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const sorted = useMemo(() => sortRows(applyFilters(all, filters, withEmpty), sortBy, cols), [all, filters, withEmpty, sortBy, cols]);
   const ranking = useMemo(() => sorted.map((c) => c.key), [sorted]);
 
-  // histograms and rings, per row, computed once per row and threshold
-  const detailCache = useMemo(() => new Map<string, RowDetail>(), [result, threshold, K]); // eslint-disable-line react-hooks/exhaustive-deps
+  // pattern rows of the open rows (lib/patterns.ts), computed once per row and setting
+  const patternCache = useMemo(() => new Map<string, PatternRow[]>(), [all, cut, eps, threshold, K, cols, names]); // eslint-disable-line react-hooks/exhaustive-deps
+  const patternsOf = useCallback((c: Combo) => {
+    let r = patternCache.get(c.key);
+    if (!r) patternCache.set(c.key, (r = patternRows(data, c, K, threshold, mode, { cut, eps, names, cols })));
+    return r;
+  }, [patternCache, data, K, threshold, mode, cut, eps, names, cols]);
+
+  // histograms and rings, per row (and pattern row), computed once per row and threshold
+  const detailCache = useMemo(() => new Map<string, RowDetail>(), [result, threshold, K, patternCache]); // eslint-disable-line react-hooks/exhaustive-deps
   const detail = useCallback((c: Combo) => {
     let d = detailCache.get(c.key);
     if (!d) detailCache.set(c.key, (d = rowDetail(data, c.sets, c.contributors, K, threshold)));
@@ -133,7 +145,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   }, [detailCache, data, K, threshold]);
   const maxBin = useMemo(() => Math.max(1, maxBinOf(sorted.map(detail))), [sorted, detail]);
   // the contributors' original memberships per cell: only for the rows drawn at Full detail (points and violins)
-  const valuesCache = useMemo(() => new Map<string, RowValues>(), [all]);
+  const valuesCache = useMemo(() => new Map<string, RowValues>(), [all, patternCache]); // eslint-disable-line react-hooks/exhaustive-deps
   const values = useCallback((c: Combo) => {
     let v = valuesCache.get(c.key);
     if (!v) valuesCache.set(c.key, (v = rowValues(data, c.sets, c.contributors)));
@@ -178,7 +190,18 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
     const s = neighbourhood(sorted, selCombo.sets, hop, supOnly);
     return (c: Combo) => s.has(c.key);
   }, [hop, selCombo, sorted, supOnly]);
-  const entries = useMemo(() => displayEntries(sorted, groups, collapsed, keep), [sorted, groups, collapsed, keep]);
+  const entries = useMemo(
+    () => displayEntries(sorted, groups, collapsed, keep, open.size ? { open, of: patternsOf } : null),
+    [sorted, groups, collapsed, keep, open, patternsOf],
+  );
+  const openable = useMemo(() => sorted.filter((c) => c.sets.length > 1 && c.contributors.length > 0), [sorted]);
+  const onToggleOpen = useCallback((key: string) => setOpen((o) => {
+    const n = new Set(o);
+    if (n.has(key)) n.delete(key);
+    else n.add(key);
+    return n;
+  }), []);
+  const openShown = openable.filter((c) => open.has(c.key)).length;
 
   // rank changes after a change of mode, τ, sort or filters: coloured rows that fade, rows that move
   const sig = `${mode}|${cutKey}|${sortBy}|${degLo},${degHi},${minMass},${minContrib},${withEmpty}`;
@@ -432,6 +455,27 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
             </div>
             {query && <p className="fp-hint">{query.agg.rows ? `${query.agg.rows} of ${sorted.length} shown combinations match` : "No shown combination matches."}</p>}
           </Popover>
+          <Popover label="Patterns" badge={openShown ? String(openShown) : null} title="Split rows by the joint pattern of their contributors' memberships (▸ on a row opens one)">
+            <p className="panel-title">Patterns</p>
+            <p className="fp-hint">
+              A row opens (▸) into pattern rows: all high, each mix of high and low, all low, and about equal (high, middle,
+              low), from the contributors' original memberships in the row's sets. They split the row's contributors and
+              mass. Full rows also show ribbons between neighbouring set axes: contributors from one membership bin to the next.
+            </p>
+            <div className="q-actions">
+              <button className="fc-btn" disabled={!openable.length} onClick={() => setOpen(new Set(openable.slice(0, PATTERN_OPEN_ALL_MAX).map((c) => c.key)))}>Open all</button>
+              <button className="fu-link" disabled={!open.size} onClick={() => setOpen(new Set())}>Close all</button>
+            </div>
+            {openable.length > PATTERN_OPEN_ALL_MAX && <p className="fp-hint">Open all opens the first {PATTERN_OPEN_ALL_MAX} of {openable.length} rows.</p>}
+            <label className="fp-row"><span className="fp-lbl">High from</span>
+              <input type="number" min={0.05} max={0.95} step={0.05} value={cut} onChange={(e) => setCut(Math.min(0.95, Math.max(0.05, +e.target.value || PATTERN_CUT)))} />
+            </label>
+            <label className="fp-row"><span className="fp-lbl">Equal within</span>
+              <input type="number" min={0} max={0.5} step={0.05} value={eps} onChange={(e) => setEps(Math.min(0.5, Math.max(0, +e.target.value || 0)))} />
+              <span className="fp-hint">max − min</span>
+            </label>
+            <p className="fp-hint">Equal rows: high if the mean is ≥ {num(cut + 0.1)}, low if &lt; {num(cut - 0.1)}, middle otherwise.</p>
+          </Popover>
           {selCombo && (
             <div className="fc-item" title="Lattice distance |T Δ S|: the number of sets added or removed">
               <span className="fc-lbl">Neighbourhood</span>
@@ -468,7 +512,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
           <UpsetMatrix
             names={names} cols={cols} mode={mode} threshold={threshold} entries={entries} lod={lod} fisheye={fisheye}
             N={data.N} range={range} R={R} G={G} onRange={onRange} maxBin={maxBin} detail={detail} groupAgg={groupAgg} query={query}
-            values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll}
+            values={values} refElem={refMark ? refX : null} elemLabel={elemLabel} onPick={onPick} profileAll={profileAll} open={open} onToggleOpen={onToggleOpen}
             selected={selected} focusMode={!!keep} reference={refMark} onSelect={onSelect} onToggleGroup={onToggleGroup} tip={tip} onLeave={onLeave}
             headHists={headHists} headMax={setHistMax} headTip={headTip} onHeaderDown={onHeaderDown} headRef={headRef}
             dropActive={!!drag?.moved && drag.kind === "add"} snapshots={snapshots} onRemoveSnapshot={onRemoveSnapshot} rank={rankView} ranking={ranking}

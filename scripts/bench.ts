@@ -3,6 +3,7 @@
 // Targets (iteration 2, section 1e): additive < 300 ms, inclusive with minMass = 0 < 1 s.
 import { additiveCombos, CELL_BUDGET, inclusiveCombos, ROW_BUDGET, rowValues, type Memberships } from "../src/lib/fuzzyDecomposition.ts";
 import { pointsToDraw, violin, violinDirect } from "../src/lib/violin.ts";
+import { patternRows, ribbonCounts } from "../src/lib/patterns.ts";
 
 function rng(seed: number) {
   return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -70,3 +71,12 @@ time("violin of a 50,000-value cell (0.01 bins)", () => violin(vals.values[0]));
 time("violin of a 50,000-value cell (direct sum)", () => violinDirect(vals.values[0]), 3);
 time("violins of 20 cells × 1,000 values (0.01 bins)", () => vals.values.map((v) => violin(v.subarray(0, 1000))));
 time("point sample of a 50,000-contributor row, 20 sets (uncached)", () => pointsToDraw(all, vals.values.map((v) => v.slice()), null), 3);
+
+// joint patterns: pattern rows (one pass over the contributors) and the ribbon tables between neighbouring axes
+const names = K.map((i) => `S${i}`);
+const big = { sets: K, key: K.join(","), mass: 0, contributors: all };
+const pr = time("pattern rows of a 50,000-contributor row, 20 sets", () => patternRows(D, big, K, null, "inclusive", { names, cols: K }), 3);
+console.log(`  ${pr.length} pattern rows`);
+const pair = { sets: [0, 1], key: "0,1", mass: 0, contributors: all };
+time("pattern rows of a 50,000-contributor row, 2 sets", () => patternRows(D, pair, K, null, "additive", { names, cols: K }));
+time("ribbons of a 50,000-contributor row, 19 axis pairs", () => K.slice(1).map((_, t) => ribbonCounts(vals.values[t], vals.values[t + 1])));

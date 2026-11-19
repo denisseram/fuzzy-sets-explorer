@@ -149,12 +149,12 @@ export function rowHeight(setting: LodSetting, n: number, avail: number, nFull =
 
 /**
  * Ids of the shown rows that Auto keeps at Full height: every entry of the selected row (rows repeat across groups)
- * and, with a fish-eye focus, the focus and `radius` shown rows on each side.
+ * and its pattern rows, and, with a fish-eye focus, the focus and `radius` shown rows on each side.
  */
 export function autoFullRows(entries: readonly Entry[], selected: string | null, focus: string | null, radius = FISHEYE_RADIUS): Set<string> {
   const out = new Set<string>();
   const shown = entries.filter((e): e is Extract<Entry, { kind: "row" }> => e.kind === "row" && !e.hidden);
-  for (const e of shown) if (e.combo.key === selected) out.add(e.id);
+  for (const e of shown) if (selected !== null && (e.combo.key === selected || e.parent === selected)) out.add(e.id);
   const f = focus === null ? -1 : shown.findIndex((e) => e.id === focus);
   if (f >= 0) for (const e of shown.slice(Math.max(0, f - radius), f + radius + 1)) out.add(e.id);
   return out;
@@ -212,25 +212,35 @@ export type HideReason = "collapsed" | "neighbourhood" | "fisheye";
 
 export type Entry =
   | { kind: "header"; id: string; group: Group; depth: number; collapsed: boolean }
-  | { kind: "row"; id: string; combo: Combo; hidden: HideReason | null }
+  | { kind: "row"; id: string; combo: Combo; hidden: HideReason | null; parent?: string }
   | { kind: "stub"; id: string; count: number; reason: HideReason };
 
 export type Placed =
   | { kind: "header"; id: string; y: number; h: number; group: Group; depth: number; collapsed: boolean }
-  | { kind: "row"; id: string; y: number; h: number; combo: Combo }
+  | { kind: "row"; id: string; y: number; h: number; combo: Combo; parent?: string }
   | { kind: "stub"; id: string; y: number; h: number; count: number; reason: HideReason };
 
 /** A stub: a 3 px line in a 5 px slot. */
 export const STUB_H = 5;
 
+/** Open rows and their pattern rows (lib/patterns.ts), shown right under each open row. */
+export type OpenPatterns = { open: ReadonlySet<string>; of: (c: Combo) => readonly Combo[] };
+
 /**
  * The display list: group headers and rows (rows repeat across groups), with rows outside `keep` (the neighbourhood)
- * marked hidden in place; a collapsed group becomes its header plus one stub.
+ * marked hidden in place; a collapsed group becomes its header plus one stub. An open row is followed by its pattern
+ * rows (entries with `parent`, hidden with their row).
  */
-export function displayEntries(rows: readonly Combo[], groups: Group[] | null, collapsed: ReadonlySet<string>, keep: ((c: Combo) => boolean) | null): Entry[] {
+export function displayEntries(
+  rows: readonly Combo[], groups: Group[] | null, collapsed: ReadonlySet<string>, keep: ((c: Combo) => boolean) | null, patterns: OpenPatterns | null = null,
+): Entry[] {
   const out: Entry[] = [];
   const addRows = (rs: readonly Combo[], pre: string) => {
-    for (const c of rs) out.push({ kind: "row", id: `${pre}${c.key}`, combo: c, hidden: keep && !keep(c) ? "neighbourhood" : null });
+    for (const c of rs) {
+      const hidden = keep && !keep(c) ? "neighbourhood" : null;
+      out.push({ kind: "row", id: `${pre}${c.key}`, combo: c, hidden });
+      if (patterns?.open.has(c.key)) for (const p of patterns.of(c)) out.push({ kind: "row", id: `${pre}${p.key}`, combo: p, hidden, parent: c.key });
+    }
   };
   const addGroup = (g: Group, depth: number) => {
     const isCollapsed = collapsed.has(g.id);
@@ -332,7 +342,7 @@ export function layout(entries: readonly Entry[], o: LayoutOptions): { items: Pl
       y += STUB_H;
     } else {
       const h = heights.get(e.id) ?? o.rowH;
-      items.push({ kind: "row", id: e.id, y, h, combo: e.combo });
+      items.push({ kind: "row", id: e.id, y, h, combo: e.combo, ...(e.parent !== undefined ? { parent: e.parent } : {}) });
       y += h;
     }
   }

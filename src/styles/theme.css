@@ -28,6 +28,18 @@
   --rank-down: #B91C1C;
   /* stubs: rows hidden in place */
   --stub: #D5D7DD;
+  /* joint patterns (pattern rows, their ribbons and points): categorical in row order, validated as adjacent pairs
+     (dataviz validate_palette.js: CVD ΔE ≥ 9.1, normal ≥ 22.9); every pattern row also carries a text label. Equal
+     rows are one hue (magenta) in three steps; mixed patterns beyond the third are grey. */
+  --pat-high: #eb6834;
+  --pat-mixed-1: #2a78d6;
+  --pat-mixed-2: #1baf7a;
+  --pat-mixed-3: #eda100;
+  --pat-low: #6250d6;
+  --pat-eq-high: #a8325f;
+  --pat-eq-mid: #d55181;
+  --pat-eq-low: #e99ab8;
+  --pat-other: #9a9894;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }

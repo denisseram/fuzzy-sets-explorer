@@ -179,6 +179,41 @@ For the reference element *x* and the selected row *T* (Full rows):
 Rules: the field offers only the contributors of the selected row in the active mode (and τ). No reference by
 default. When the row, mode, sets or τ change, the element is kept if it still contributes, otherwise cleared.
 
+## 6b. Joint patterns: ribbons and pattern rows
+
+The violins show each set of a row separately. Two views show how a contributor's memberships **combine** in the
+row's sets (original values, also in threshold mode), at a cost that does not grow with the number of elements.
+
+**Ribbons** (Full rows). Between each pair of neighbouring set axes of the row (column order), one ribbon per pair of
+display bins: from bin *i* of the left set to bin *j* of the right set, as thick as the number of contributors in
+both (parallel sets; at most 25 per pair, computed from all contributors, never the point sample). Inside each bin
+the ribbons are stacked without overlap and centred; at the left axis ordered by their target bin, at the right axis
+by their source bin, so ribbons cross only when the memberships do. Scale per row: the row's largest bin fills its
+0.2 band (the bars give absolute sizes). Example, MovieLens Comedy ∩ Drama: 114 movies run from Comedy 0.8–1 to
+Drama 0–0.2 and 183 from Comedy 0–0.2 to Drama 0.8–1, so two thick ribbons cross; 16 run along the top.
+
+**Pattern rows.** ▸ at a row's left edge opens it into pattern rows directly under it (▾ closes them); several rows
+can stay open. **Patterns ▾** in the controls: **Open all** (the first 300 rows of two or more sets), **Close all**,
+**High from** (cut *c*, default 0.5) and **Equal within** (ε, default 0.15). Each contributor of the row is in exactly
+one pattern:
+
+- **Equal**: max − min of its memberships in the row's sets ≤ ε; then **Equal, high** (mean ≥ c + 0.1), **Equal,
+  low** (mean < c − 0.1) or **Equal, middle**.
+- Otherwise by which sets reach the cut: **Both / All high**, a **mixed** pattern (e.g. "Comedy high · Drama low";
+  with more than 3 sets "high in A, B; low in the others"), or **Both / All low**.
+- Order: all high, mixed (more high sets first, then column order), all low, equal high, middle, low. Empty patterns
+  are omitted; above 12 rows the smallest mixed patterns merge into "Other mixed (n patterns)".
+
+Pattern rows partition the row: their contributors add up to the row's, and their masses (the sum of each
+contributor's value in the row: the inclusive minimum of m', or the component) add up to the row's mass. They use the
+row design (bars, points, violins, ribbons, circles) in the pattern's colour, with a light tint and a colour mark at
+the left edge; the circles show high sets as filled discs and low sets as rings (equal rows: half-tone discs); the
+label right of the matrix reads, e.g., "Comedy high · Drama low — 372 (25 %)". In Auto the selected row's pattern
+rows are Full. They are display only: sorting, filters, groups, queries and snapshots use the rows. Clicking a
+pattern row selects its row; the reference element's profile is also drawn in the pattern row that contains it.
+
+Fixture, inclusive A ∩ B: **A low · B high** (E2, mass 0.2) and **Equal, high** (E1 0.8/0.7, E4 0.6/0.6; mass 1.3).
+
 ## 7. Interaction
 
 - No row is selected initially. Clicking a row (bars or matrix) selects it; clicking it again deselects it. The
@@ -217,7 +252,10 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 
 ## 9. Colours and sizes
 
-- Navy (#282C5F): bars, histograms, violins (fill 14 %) and points (55 %). Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
+- Navy (#282C5F): bars, histograms, violins (fill 14 %) and points (55 %).
+- Patterns (validated as adjacent pairs, every pattern row labelled): all high #eb6834, mixed #2a78d6, #1baf7a,
+  #eda100 (further mixed patterns grey #9a9894), all low #6250d6, equal high / middle / low #a8325f, #d55181, #e99ab8.
+  Ribbons: navy at 18 % in rows, the pattern colour at 35 % in pattern rows. Ink (#16191D): circles and connector. Light grey (#E4E5EA): empty dots.
   Grey (#8C9099): rings and their histograms. Red (#E4002B): the reference profile, line, band, label and τ marks.
 - Compact strips: ink at opacity 0.1 + 0.85 · count / max (grayscale on the shared count scale).
 - Rank changes: green #2E8540 (moved up), red #B91C1C (moved down); stubs #D5D7DD.

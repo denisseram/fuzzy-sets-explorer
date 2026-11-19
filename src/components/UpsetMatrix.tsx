@@ -6,6 +6,7 @@ import {
   autoFullRows, countEntries, horizon, layout, lodOf, rankChangeIntensity, rankChanges, ROW_FULL, rowHeight, stubText, type Entry, type Group, type LodSetting, type Placed,
 } from "../lib/upsetView";
 import { indexOfSorted, jitter, MAX_POINTS, pointsToDraw, profilePath, VIOLIN_STEPS, violinOf } from "../lib/violin";
+import { isPatternRow, ribbonGeometry, ribbonsOf, type PatternRow } from "../lib/patterns";
 import { HistBars } from "./MiniHist";
 
 /** Width of the column-header histograms (membership 0 left, 1 right) and the largest half-violin width (a count). */
@@ -75,6 +76,14 @@ export function Dot({ cx, cy, r = DOT_R, member, hole = 0, may = false }: { cx: 
   );
 }
 
+/** A set slot of a pattern row: high = filled disc, low = ring, in the pattern colour; equal and other: half-tone. */
+function PatDot({ cx, cy, r, pat, set }: { cx: number; cy: number; r: number; pat: PatternRow; set: number }) {
+  const k = pat.pattern.kind;
+  if (k === "equal" || k === "other") return <circle cx={cx} cy={cy} r={r} fill="var(--row-c)" fillOpacity={0.55} />;
+  const high = k === "allHigh" || pat.pattern.high.includes(set);
+  return high ? <circle cx={cx} cy={cy} r={r} fill="var(--row-c)" /> : <circle cx={cx} cy={cy} r={r - 0.9} fill="var(--panel)" stroke="var(--row-c)" strokeWidth={1.8} />;
+}
+
 /**
  * A half violin right of the axis at `ax`: f (elements per 0.2 of membership, at y = 0, 0.02, …, 1) as a width on the
  * shared scale `maxF` (HIST_W px), membership on the vertical axis `yOf`.
@@ -88,13 +97,13 @@ function Violin({ ax, f, maxF, yOf, color }: { ax: number; f: Float64Array; maxF
 }
 
 /** Compact level: the 5 bins as grayscale cells stacked bottom ([0, 0.2)) to top (darker = more elements, shared count scale). */
-function VStrip({ x, y, h, counts, maxC, ring = false }: { x: number; y: number; h: number; counts: number[]; maxC: number; ring?: boolean }) {
+function VStrip({ x, y, h, counts, maxC, ring = false, color = "var(--ink)" }: { x: number; y: number; h: number; counts: number[]; maxC: number; ring?: boolean; color?: string }) {
   const bh = h / N_BINS;
   return (
     <g pointerEvents="none">
       <rect x={x} y={y} width={STRIP_W} height={h} fill="none" stroke="var(--axis)" strokeWidth={0.6} />
       {counts.map((c, b) => c > 0 && (
-        <rect key={b} x={x} y={y + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill={ring ? "var(--near-ring)" : "var(--ink)"} fillOpacity={(ring ? 0.5 : 1) * (0.1 + 0.85 * (c / Math.max(1, maxC)))} />
+        <rect key={b} x={x} y={y + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill={ring ? "var(--near-ring)" : color} fillOpacity={(ring ? 0.5 : 1) * (0.1 + 0.85 * (c / Math.max(1, maxC)))} />
       ))}
     </g>
   );
@@ -190,6 +199,9 @@ export type MatrixProps = {
   onPick: (key: string, x: number) => void;
   /** Draw the reference element's profile in every visible Full row where it contributes. */
   profileAll: boolean;
+  /** Rows opened into their pattern rows (lib/patterns.ts), and the ▸ toggle. */
+  open: ReadonlySet<string>;
+  onToggleOpen: (key: string) => void;
   groupAgg: (g: Group) => Agg;
   query: { text: string; agg: Agg; matches: ReadonlySet<string> } | null;
   selected: string | null;
@@ -336,12 +348,21 @@ function UpsetMatrix(p: MatrixProps) {
     const n = c.contributors.length;
     const det = p.detail(c);
     const rings = new Map(det.rings.map((g) => [g.set, g]));
-    const isSel = selected === c.key;
+    // a pattern row belongs to its row: selection, dimming and clicks go to the row
+    const pat: PatternRow | null = isPatternRow(c) ? c : null;
+    const owner = pat ? pat.parent : c.key;
+    const isSel = selected === owner;
     const dim = selected && !isSel && !p.focusMode ? 0.45 : 1;
-    const bg = isSel ? "var(--accent-bg)" : "var(--panel)";
+    const bg = isSel && !pat ? "var(--accent-bg)" : "var(--panel)";
     const name = rowName(c.sets);
     const cxs = cols.flatMap((s, ci) => (c.sets.includes(s) ? [colX(ci) + CIRCLE_X] : []));
-    const barTip = (ev: React.MouseEvent) => tip(ev, name, [
+    const share = pat ? `${((100 * n) / Math.max(1, pat.parentCount)).toFixed(0)} %` : "";
+    const canOpen = !pat && c.sets.length > 1 && n > 0;
+    const barTip = (ev: React.MouseEvent) => tip(ev, pat ? `${name} · ${pat.pattern.label}` : name, pat ? [
+      modeName,
+      `contributors: ${n} of ${pat.parentCount} (${share})`,
+      `membership mass: ${fmt(c.mass)}${n ? ` (mean ${fmt(c.mass / n)} per contributor)` : ""}`,
+    ] : [
       modeName,
       `contributors: ${n}`,
       `membership mass: ${fmt(c.mass)}${n ? ` (mean ${fmt(c.mass / n)} per contributor)` : ""}`,
@@ -353,22 +374,35 @@ function UpsetMatrix(p: MatrixProps) {
     return (
       <Moving
         key={it.id} id={it.id} y={it.y} prev={prevY} animate={animate} epoch={p.rank.epoch} delta={p.rank.delta.get(c.key) ?? 0} width={colX(k)} h={h}
-        className="fu-row" onClick={() => p.onSelect(c.key)} aria-label={name}
+        className={pat ? "fu-row fu-row-pat" : "fu-row"} onClick={() => p.onSelect(owner)} aria-label={pat ? `${name}: ${pat.pattern.label}` : name}
+        style={pat ? ({ "--row-c": pat.pattern.color } as React.CSSProperties) : undefined}
         onMouseEnter={p.fisheye ? () => (clearTimeout(hoverTimer.current), (hoverTimer.current = window.setTimeout(() => setHoverId(it.id), 150))) : undefined}
       >
         <rect x={PAD} y={0} width={W - PAD} height={h} fill={bg} className="fu-row-bg" />
+        {pat && <rect x={PAD} y={0} width={W - PAD} height={h} fill="var(--row-c)" fillOpacity={0.06} pointerEvents="none" />}
         {h >= 9 && <line x1={PAD} x2={colX(k)} y1={h} y2={h} stroke="var(--rule-2)" />}
-        {p.query?.matches.has(c.key) && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--accent)" />}
+        {pat && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--row-c)" />}
+        {!pat && p.query?.matches.has(c.key) && <rect x={PAD - 7} y={1} width={3} height={h - 2} fill="var(--accent)" />}
+        {canOpen && (
+          <g
+            className="fu-tg" role="button" aria-expanded={p.open.has(c.key)} aria-label={`${p.open.has(c.key) ? "Close" : "Open"} the patterns of ${name}`}
+            onClick={(ev) => (ev.stopPropagation(), p.onToggleOpen(c.key))}
+            onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, name, [p.open.has(c.key) ? "click: close the pattern rows" : "click: split by pattern (both high, one high, both low, about equal)"]))}
+          >
+            <rect x={0} y={0} width={PAD - 8} height={h} fill="transparent" />
+            <text x={3} y={cy + 4}>{p.open.has(c.key) ? "▾" : "▸"}</text>
+          </g>
+        )}
         <g onMouseMove={barTip}>
           <rect x={PAD} y={0} width={BAR_W} height={h} fill="transparent" />
           {bars(n, c.mass, cy, Math.max(2, Math.min(BAR_H, h - 6)))}
         </g>
         <g opacity={dim}>
           {cols.map((s, ci) => !c.sets.includes(s) && !rings.has(s) && <Dot key={s} cx={colX(ci) + CIRCLE_X} cy={cy} r={r} member={false} />)}
-          {cxs.length > 1 && <line x1={Math.min(...cxs)} x2={Math.max(...cxs)} y1={cy} y2={cy} stroke="var(--ink)" strokeWidth={isSel ? Math.min(3.5, r) : Math.min(2.5, r * 0.8)} />}
+          {cxs.length > 1 && <line x1={Math.min(...cxs)} x2={Math.max(...cxs)} y1={cy} y2={cy} stroke={pat ? "var(--row-c)" : "var(--ink)"} strokeWidth={isSel && !pat ? Math.min(3.5, r) : Math.min(2.5, r * 0.8)} />}
         </g>
-        {lod === "full" && fullCells(c, h, det, rings, isSel, dim, name)}
-        {lod === "compact" && compactCells(c, h, det, rings, isSel, dim, bg, name)}
+        {lod === "full" && fullCells(c, h, det, rings, isSel, dim, name, owner, pat)}
+        {lod === "compact" && compactCells(c, h, det, rings, isSel, dim, bg, name, pat)}
         <g opacity={dim}>
           {cols.map((s, ci) => {
             const member = c.sets.includes(s);
@@ -384,18 +418,23 @@ function UpsetMatrix(p: MatrixProps) {
                   : [`${names[s]} is in this combination`]))}
               >
                 <circle cx={cx} cy={cy} r={r + 3} fill="transparent" />
-                <Dot cx={cx} cy={cy} r={r} member={member} hole={ring && tau !== null ? holeRadius(ring.mean, tau, HOLE_MIN, HOLE_MAX) * (r / DOT_R) : 0} />
+                {pat && member ? <PatDot cx={cx} cy={cy} r={r} pat={pat} set={s} /> : (
+                  <Dot cx={cx} cy={cy} r={r} member={member} hole={ring && tau !== null ? holeRadius(ring.mean, tau, HOLE_MIN, HOLE_MAX) * (r / DOT_R) : 0} />
+                )}
               </g>
             );
           })}
         </g>
-        {isSel && reference && lod === "compact" && <text className="fu-ref-lbl" x={colX(k) + 4} y={cy + 3.5}>{reference.label}</text>}
+        {isSel && !pat && reference && lod === "compact" && <text className="fu-ref-lbl" x={colX(k) + 4} y={cy + 3.5}>{reference.label}</text>}
+        {pat && lod !== "minimal" && (
+          <text className="fu-pat-lbl" x={colX(k) + 4} y={cy + 3.5}>{`${pat.pattern.label} — ${n.toLocaleString("en-US")} (${share})`}</text>
+        )}
       </Moving>
     );
   };
 
   /** Compact cells: a vertical strip of the 5 bins right of each circle; the reference element as a tick across it. */
-  const compactCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, bg: string, name: string) => {
+  const compactCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, bg: string, name: string, pat: PatternRow | null) => {
     const n = c.contributors.length;
     const sh = h - 4, sy = 2, bh = sh / N_BINS;
     return cols.map((s, ci) => {
@@ -407,7 +446,7 @@ function UpsetMatrix(p: MatrixProps) {
       return (
         <g key={s}>
           <rect x={x0 - 3} y={1} width={STRIP_W + 6} height={h - 2} fill={bg} />
-          <g opacity={dim}><VStrip x={x0} y={sy} h={sh} counts={counts} maxC={p.maxBin} ring={!member} /></g>
+          <g opacity={dim}><VStrip x={x0} y={sy} h={sh} counts={counts} maxC={p.maxBin} ring={!member} color={pat ? "var(--row-c)" : undefined} /></g>
           {counts.map((kk, b) => (
             <rect
               key={b} x={x0} y={sy + (N_BINS - 1 - b) * bh} width={STRIP_W} height={bh} fill="transparent"
@@ -416,7 +455,7 @@ function UpsetMatrix(p: MatrixProps) {
                 : [`below τ but near ${names[s]}: ${binLabel(b)}: ${plural(kk)}`, "not counted in masses or contributors"]))}
             />
           ))}
-          {isSel && reference && member && (
+          {isSel && reference && member && (!pat || indexOfSorted(c.contributors, p.refElem ?? -1) >= 0) && (
             <line x1={x0 - 3} x2={x0 + STRIP_W + 3} y1={sy + (1 - reference.value) * sh} y2={sy + (1 - reference.value) * sh} stroke="var(--select)" strokeWidth={2} pointerEvents="none" />
           )}
         </g>
@@ -429,7 +468,7 @@ function UpsetMatrix(p: MatrixProps) {
    * and the half violin right of it; rings get a grey violin. The reference element's profile: a curve through its
    * points, a dashed line at its minimum and (additive) the band from the outside maximum to the inside minimum.
    */
-  const fullCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, name: string) => {
+  const fullCells = (c: Combo, h: number, det: RowDetail, rings: Map<number, RowDetail["rings"][number]>, isSel: boolean, dim: number, name: string, owner: string, pat: PatternRow | null) => {
     const n = c.contributors.length;
     const pTop = PLOT_TOP, pBot = h - CIRCLE_STRIP;
     const yOf = (v: number) => pBot - v * (pBot - pTop);
@@ -457,7 +496,7 @@ function UpsetMatrix(p: MatrixProps) {
       const d = (ev.target as SVGElement).dataset;
       if (d?.x === undefined) return;
       ev.stopPropagation();
-      p.onPick(c.key, +d.x);
+      p.onPick(owner, +d.x);
     };
     const cellTip = (s: number, b: number, member: boolean) => (ev: React.MouseEvent) => {
       ev.stopPropagation();
@@ -479,6 +518,29 @@ function UpsetMatrix(p: MatrixProps) {
         {GRID.map((v) => <line key={v} x1={gx0} x2={gx1} y1={yOf(v)} y2={yOf(v)} className="fu-grid" />)}
         <text className="bar-hd" x={gx0 - 3} y={yOf(0) + 3} textAnchor="end">0</text>
         <text className="bar-hd" x={gx0 - 3} y={yOf(1) + 3} textAnchor="end">1</text>
+        {/* ribbons between neighbouring set axes: contributors from bin i of one set to bin j of the next (all of them) */}
+        <g opacity={dim}>
+          {part.slice(1).map((q1, t) => {
+            const q0 = part[t];
+            const ax0 = colX(q0.ci) + AXIS_X, ax1 = colX(q1.ci) + AXIS_X, xm = (ax0 + ax1) / 2;
+            const binH = yOf(0) - yOf(BIN_EDGES[1]);
+            const scaleMax = Math.max(1, ...det.hists.flat());
+            return ribbonGeometry(ribbonsOf(vals, q0.j, q1.j), scaleMax, binH).map((rb) => {
+              const l0 = yOf(binTop(rb.i)) + rb.left[0], l1 = yOf(binTop(rb.i)) + rb.left[1];
+              const r0 = yOf(binTop(rb.j)) + rb.right[0], r1 = yOf(binTop(rb.j)) + rb.right[1];
+              const f = (v: number) => v.toFixed(1);
+              return (
+                <path
+                  key={`${q0.s}-${rb.i}-${rb.j}`} className="fu-ribbon" fill={pat ? "var(--row-c)" : "var(--accent)"} fillOpacity={pat ? 0.35 : 0.18}
+                  d={`M${ax0},${f(l0)}C${xm},${f(l0)} ${xm},${f(r0)} ${ax1},${f(r0)}L${ax1},${f(r1)}C${xm},${f(r1)} ${xm},${f(l1)} ${ax0},${f(l1)}Z`}
+                  onMouseMove={(ev) => (ev.stopPropagation(), tip(ev, `${names[q0.s]} ${binLabel(rb.i)} → ${names[q1.s]} ${binLabel(rb.j)}: ${plural(rb.count)}`, [
+                    `of ${plural(n)} in ${name}${pat ? ` · ${pat.pattern.label}` : ""}`,
+                  ]))}
+                />
+              );
+            });
+          })}
+        </g>
         {cols.map((s, ci) => {
           const member = c.sets.includes(s);
           const ring = rings.get(s);
@@ -492,7 +554,7 @@ function UpsetMatrix(p: MatrixProps) {
               <line x1={ax} x2={ax} y1={yOf(0)} y2={yOf(1)} className="fu-hist-axis" />
               {tau !== null && <line x1={ax - 3} x2={ax + 3} y1={yOf(tau)} y2={yOf(tau)} className="fu-hist-tick" />}
               <g opacity={dim}>
-                {v.length > 0 && <Violin ax={ax} f={violinOf(v).f} maxF={maxF} yOf={yOf} color={member ? "var(--accent)" : "var(--near-ring)"} />}
+                {v.length > 0 && <Violin ax={ax} f={violinOf(v).f} maxF={maxF} yOf={yOf} color={member ? (pat ? "var(--row-c)" : "var(--accent)") : "var(--near-ring)"} />}
               </g>
               {BIN_EDGES.map((lo, b) => (
                 <rect key={b} x={ax} y={yOf(binTop(b))} width={HIST_W} height={yOf(lo) - yOf(binTop(b))} fill="transparent" onMouseMove={cellTip(s, b, member)} />
@@ -541,7 +603,7 @@ function UpsetMatrix(p: MatrixProps) {
             <circle key={`r${q.s}`} cx={colX(q.ci) + pointDx(ref)} cy={yOf(refV(q.j))} r={PT_R_REF} className="fu-pt-ref" data-x={ref} data-s={q.s} data-v={refV(q.j)} />
           ))}
         </g>
-        {isSel && reference && ref !== null && <text className="fu-ref-lbl" x={colX(k) + 4} y={yOf(refMin) + 3.5}>{reference.label}</text>}
+        {isSel && !pat && reference && ref !== null && <text className="fu-ref-lbl" x={colX(k) + 4} y={yOf(refMin) + 3.5}>{reference.label}</text>}
       </g>
     );
   };
@@ -576,7 +638,7 @@ function UpsetMatrix(p: MatrixProps) {
   // ---- snapshots: slope lines and mini glyphs ------------------------------------------------------------------------
 
   const snapDelta = useMemo(() => p.snapshots.map((s) => rankChanges(s.keys, p.ranking)), [p.snapshots, p.ranking]);
-  const liveRows = lay.items.filter((it): it is Extract<Placed, { kind: "row" }> => it.kind === "row");
+  const liveRows = lay.items.filter((it): it is Extract<Placed, { kind: "row" }> => it.kind === "row" && it.parent === undefined);
   const liveKeys = new Set(liveRows.map((it) => it.combo.key));
   const snapLayer = p.snapshots.map((s, si) => {
     const x0 = snapX(si), x1 = x0 + SLOPE_W, gx = x1 + 2;

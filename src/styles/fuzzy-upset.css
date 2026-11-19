@@ -138,6 +138,14 @@
 .fu-pt { fill: var(--accent); fill-opacity: .55; stroke: transparent; stroke-width: 2; cursor: pointer; }
 .fu-pt:hover { fill-opacity: 1; }
 .fu-pt-ref { fill: var(--select); stroke: var(--panel); stroke-width: 1; cursor: pointer; }
+/* joint patterns: the ▸ toggle, pattern rows in their colour (--row-c), ribbons between set axes */
+.fu-tg { cursor: pointer; }
+.fu-tg text { font-size: 11px; fill: var(--ink-3); }
+.fu-tg:hover text { fill: var(--accent); }
+.fu-row-pat .fu-pt { fill: var(--row-c); fill-opacity: .7; }
+.fu-row-pat .fu-bar-out { fill: var(--row-c); fill-opacity: .12; stroke: var(--row-c); }
+.fu-row-pat .fu-bar-in { fill: var(--row-c); }
+.fu-pat-lbl { font-family: "Poppins", system-ui, sans-serif; font-size: 10px; fill: var(--ink-2); }
 .fu-bar { transition: x .25s ease, width .25s ease; }
 .fu-bar-out { fill: var(--accent); fill-opacity: .1; stroke: var(--accent); stroke-width: 1; }
 .fu-bar-in { fill: var(--accent); }
