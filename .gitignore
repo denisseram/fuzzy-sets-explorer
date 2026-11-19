@@ -19,6 +19,7 @@ npm-debug.log*
 
 # jetbrains setting folder
 .idea/
+datasets/
 
 # Raw downloads (MovieLens ml-32m, Tag Genome 2021, UpSet movies). Only the small derived exports in
 # public/data/ are committed: the site is built from the repo and needs them.
