@@ -91,6 +91,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [lod, setLod] = useState<LodSetting>("auto");
   const [fisheye, setFisheye] = useState(false);
+  const [sideOpen, setSideOpen] = useState(false);
   const [hop, setHop] = useState(0);
   const [supOnly, setSupOnly] = useState(false);
   const [setOrder, setSetOrder] = useState<SetOrder>("input");
@@ -358,149 +359,186 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const note = issues.length ? issuesNote(issues, ds.obsWord) : null;
   const shelf = names.map((_, i) => i).filter((i) => !K.includes(i));
   const filterBadge = [degLo !== null || degHi !== null, minMass > 0, minContrib > 1, withEmpty].filter(Boolean).length;
+  // shown on the collapsed options panel: how many options change the rows or their marks
+  const activeCount = [thActive, filterBadge > 0, activeClauses.length > 0, openShown > 0, snapshots.length > 0, !!refText, hop > 0 && !!selCombo]
+    .filter(Boolean).length;
 
   return (
     <div className="fu">
       <p className="fu-showing" title={showingWhy || undefined}>
         {showing}{result.stoppedAt !== null && <span className="fu-warn"> · enumeration stopped before degree {result.stoppedAt}: raise the minimum mass or lower the maximum degree</span>}
       </p>
-      <div className="fc">
-        <div className="fc-row">
-          <div className="fc-item">
-            <span className="fc-lbl">Mode</span>
-            <div className="seg" role="group" aria-label="Mode">
-              <button aria-pressed={mode === "inclusive"} onClick={() => setMode("inclusive")} title="Membership in every set of the row (min); other sets unrestricted">Inclusive intersections</button>
-              <button aria-pressed={mode === "additive"} onClick={() => setMode("additive")} title="Membership above the element's memberships in the other selected sets; the masses add up">Additive contributions</button>
-            </div>
-          </div>
-          <div className="fc-item">
-            <label className="fc-lbl" htmlFor="fu-ref">Reference element</label>
-            <input
-              id="fu-ref" className="fu-ref" list="fu-ref-list" value={refText} disabled={!selCombo || !contributors.length}
-              placeholder={!selCombo ? "select a row first" : contributors.length ? `search ${contributors.length} contributors` : "no contributors"}
-              onChange={(e) => (setRefText(e.target.value), setRefX(byLabel.get(e.target.value) ?? null))}
-            />
-            <datalist id="fu-ref-list">{contributors.slice(0, 2000).map((x) => <option key={x} value={optLabel(x)} />)}</datalist>
-            {refText && <button className="fu-link" aria-label="Clear the reference element" onClick={clearRef}>✕</button>}
-            <label className="fc-check" title="Draw the reference element's profile in every visible Full row where it contributes, not only in the selected row">
-              <input type="checkbox" checked={profileAll} onChange={(e) => setProfileAll(e.target.checked)} /> Profile in all rows
-            </label>
-          </div>
-          <button
-            className="fc-btn" aria-pressed={thActive} disabled={crisp} onClick={() => setThOn(!thOn)}
-            title={crisp ? "Crisp memberships (0 or 1): τ has no effect" : thOn ? "Turn threshold mode off" : "Count only memberships that reach τ"}
-          >
-            Threshold{thActive ? (perSetOn ? " per set" : ` τ = ${tauLive.toFixed(2)}`) : ""}
-          </button>
-          <button className="fc-btn" onClick={takeSnapshot} title={`Store the current ranking with its settings (at most 2; a third replaces the oldest)${snapshots.length ? `. Stored: ${snapshots.map((s) => s.label).join("; ")}` : ""}`}>
-            Snapshot{snapshots.length ? <span className="fc-badge">{snapshots.length}</span> : null}
-          </button>
-        </div>
-        <div className="fc-row">
-          <label className="fc-item"><span className="fc-lbl">Sort</span>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>{SORTS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-          </label>
-          <label className="fc-item"><span className="fc-lbl">Group by</span>
-            <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>{GROUPS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-          </label>
-          <label className="fc-item" title="Column order; rows sorted by degree break ties by this order"><span className="fc-lbl">Set order</span>
-            <select value={setOrder} onChange={(e) => setSetOrder(e.target.value as SetOrder)}>{ORDERS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-          </label>
-          <label className="fc-item" title="Level of detail per cell: Full = points and half violin, Compact = vertical grayscale strip, Minimal = circles only. Auto: the selected row (and the fish-eye focus) Full, the others at the largest level at which all rows fit"><span className="fc-lbl">Rows</span>
-            <select value={lod} onChange={(e) => setLod(e.target.value as LodSetting)}>{LODS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-          </label>
-          <label className="fc-item fc-check" title="When rows overflow: the hovered or selected row and 3 neighbours on each side get full height">
-            <input type="checkbox" checked={fisheye} onChange={(e) => setFisheye(e.target.checked)} /> Fish-eye
-          </label>
-          <Popover label="Filters" badge={filterBadge ? String(filterBadge) : null} title="Degree range, minimum mass and contributors, empty rows">
-            <p className="panel-title">Filters</p>
-            <label className="fp-row" title={emptyOk ? "Also show combinations with zero mass in the active mode (only the degree range applies to them)" : `Too many rows: available up to ${MAX_SETS_EMPTY_ROWS} selected sets`}>
-              <input type="checkbox" checked={withEmpty} disabled={!emptyOk} onChange={(e) => setShowEmpty(e.target.checked)} /> Show empty rows
-            </label>
-            <div className="fp-row">
-              <span className="fp-lbl">Degree</span>
-              <select aria-label="Minimum degree" value={lo} onChange={(e) => setDegLo(+e.target.value)}>
-                {K.map((_, d) => <option key={d} value={d + 1}>{d + 1}</option>)}
-              </select>
-              to
-              <select aria-label="Maximum degree" value={hi} onChange={(e) => setDegHi(+e.target.value)}>
-                {K.map((_, d) => <option key={d} value={d + 1} disabled={d + 1 < lo}>{d + 1}{d + 1 === maxDeg ? " (max nonzero)" : ""}</option>)}
-              </select>
-            </div>
-            <label className="fp-row"><span className="fp-lbl">Min. mass</span>
-              <input type="number" min={0} step={0.1} value={minMass} onChange={(e) => setMinMass(Math.max(0, +e.target.value || 0))} />
-              <span className="fp-hint">{minMass ? "" : "0 = any mass > 0"}</span>
-            </label>
-            <label className="fp-row"><span className="fp-lbl">Min. contributors</span>
-              <input type="number" min={1} step={1} value={minContrib} onChange={(e) => setMinContrib(Math.max(1, Math.round(+e.target.value || 1)))} />
-            </label>
-            <p className="fp-hint">In inclusive mode the minimum mass and the maximum degree also prune the enumeration.</p>
-            <button className="fu-link" onClick={() => (setDegLo(null), setDegHi(null), setMinMass(0), setMinContrib(1), setShowEmpty(false))}>Reset filters</button>
-          </Popover>
-          <Popover label="Query" badge={activeClauses.length ? String(query?.agg.rows ?? 0) : null} title="Select combinations: each set must / may / not be in the row; OR between clauses" wide>
-            <p className="panel-title">Query</p>
-            <p className="fp-hint">Click a symbol to cycle: <QSym q="may" /> may · <QSym q="must" /> must · <QSym q="not" /> not. A row matches if it matches any clause.</p>
-            <div className="q-grid" style={{ gridTemplateColumns: `repeat(${cols.length}, 22px) 1fr 18px` }}>
-              {cols.map((i) => <span key={i} className="q-head" title={names[i]}>{short(names[i], 4)}</span>)}
-              <span /><span />
-              {clauses.map((cl, ci) => [
-                ...cols.map((i) => {
-                  const q = cl[i] ?? "may";
-                  return (
-                    <button
-                      key={`${ci}-${i}`} className="q-cell" aria-label={`${names[i]}: ${q}`} title={`${names[i]}: ${q}`}
-                      onClick={() => setClauses((cs) => cs.map((c, j) => (j === ci ? { ...c, [i]: NEXT_Q[q] } : c)))}
-                    >
-                      <QSym q={q} />
-                    </button>
-                  );
-                }),
-                <span key={`t${ci}`} className="q-text">{ci > 0 ? "OR " : ""}{describeClause(activeClauses[ci], names, cols)}</span>,
-                <button key={`x${ci}`} className="fu-link" aria-label="Remove this clause" onClick={() => setClauses((cs) => cs.filter((_, j) => j !== ci))}>✕</button>,
-              ])}
-            </div>
-            <div className="q-actions">
-              <button className="fc-btn" onClick={() => setClauses((cs) => [...cs, {}])}>{clauses.length ? "+ OR clause" : "+ Clause"}</button>
-              {clauses.length > 0 && <button className="fu-link" onClick={() => setClauses([])}>Clear</button>}
-            </div>
-            {query && <p className="fp-hint">{query.agg.rows ? `${query.agg.rows} of ${sorted.length} shown combinations match` : "No shown combination matches."}</p>}
-          </Popover>
-          <Popover label="Patterns" badge={openShown ? String(openShown) : null} title="Split rows by the joint pattern of their contributors' memberships (▸ on a row opens one)">
-            <p className="panel-title">Patterns</p>
-            <p className="fp-hint">
-              A row opens (▸) into pattern rows: all high, each mix of high and low, all low, and about equal (high, middle,
-              low), from the contributors' original memberships in the row's sets. They split the row's contributors and
-              mass. Full rows also show ribbons between neighbouring set axes: contributors from one membership bin to the next.
-            </p>
-            <div className="q-actions">
-              <button className="fc-btn" disabled={!openable.length} onClick={() => setOpen(new Set(openable.slice(0, PATTERN_OPEN_ALL_MAX).map((c) => c.key)))}>Open all</button>
-              <button className="fu-link" disabled={!open.size} onClick={() => setOpen(new Set())}>Close all</button>
-            </div>
-            {openable.length > PATTERN_OPEN_ALL_MAX && <p className="fp-hint">Open all opens the first {PATTERN_OPEN_ALL_MAX} of {openable.length} rows.</p>}
-            <label className="fp-row"><span className="fp-lbl">High from</span>
-              <input type="number" min={0.05} max={0.95} step={0.05} value={cut} onChange={(e) => setCut(Math.min(0.95, Math.max(0.05, +e.target.value || PATTERN_CUT)))} />
-            </label>
-            <label className="fp-row"><span className="fp-lbl">Equal within</span>
-              <input type="number" min={0} max={0.5} step={0.05} value={eps} onChange={(e) => setEps(Math.min(0.5, Math.max(0, +e.target.value || 0)))} />
-              <span className="fp-hint">max − min</span>
-            </label>
-            <p className="fp-hint">Equal rows: high if the mean is ≥ {num(cut + 0.1)}, low if &lt; {num(cut - 0.1)}, middle otherwise.</p>
-          </Popover>
-          {selCombo && (
-            <div className="fc-item" title="Lattice distance |T Δ S|: the number of sets added or removed">
-              <span className="fc-lbl">Neighbourhood</span>
-              <div className="seg" role="group" aria-label="Neighbourhood distance">
-                {[0, 1, 2, 3].map((d) => <button key={d} aria-pressed={hop === d} onClick={() => setHop(d)}>{d ? d : "Off"}</button>)}
-              </div>
-              <label className="fc-check" title="Keep only supersets S ⊇ T of the selected row T. In additive mode, the components of all supersets of T add up to T's inclusive mass.">
-                <input type="checkbox" checked={supOnly} disabled={!hop} onChange={(e) => setSupOnly(e.target.checked)} /> Supersets only
-              </label>
-            </div>
-          )}
-        </div>
-      </div>
       {note && <p className="fu-excl" title={note.detail}>⚠ {note.text}</p>}
       <div className="fu-body">
+        <aside className={`fu-side${sideOpen ? " open" : ""}`} aria-label="Options">
+          <button
+            className="fs-toggle" aria-expanded={sideOpen} aria-controls="fu-options" onClick={() => setSideOpen(!sideOpen)}
+            title={sideOpen ? "Hide options" : `Show options${activeCount ? ` (${activeCount} active)` : ""}`}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.4" fill="none" />
+              {[[5, 4], [10, 8], [6, 12]].map(([x, y]) => <circle key={y} cx={x} cy={y} r={1.7} fill="var(--panel)" stroke="currentColor" strokeWidth="1.2" />)}
+            </svg>
+            <span className="fs-toggle-lbl">Options</span>
+            {!sideOpen && activeCount > 0 && <span className="fc-badge">{activeCount}</span>}
+            <span className="fs-chev" aria-hidden="true">{sideOpen ? "‹" : "›"}</span>
+          </button>
+          {sideOpen && (
+            <div className="fc fs-body" id="fu-options">
+              <section className="fs-group">
+                <p className="fs-title">Calculation</p>
+                <div className="fs-field"><span className="fc-lbl">Mode</span>
+                  <div className="seg seg-col" role="group" aria-label="Mode">
+                    <button aria-pressed={mode === "inclusive"} onClick={() => setMode("inclusive")} title="Membership in every set of the row (min); other sets unrestricted">Inclusive intersections</button>
+                    <button aria-pressed={mode === "additive"} onClick={() => setMode("additive")} title="Membership above the element's memberships in the other selected sets; the masses add up">Additive contributions</button>
+                  </div>
+                </div>
+                <div className="fs-btns">
+                  <button
+                    className="fc-btn" aria-pressed={thActive} disabled={crisp} onClick={() => setThOn(!thOn)}
+                    title={crisp ? "Crisp memberships (0 or 1): τ has no effect" : thOn ? "Turn threshold mode off" : "Count only memberships that reach τ"}
+                  >
+                    Threshold{thActive ? (perSetOn ? " per set" : ` τ = ${tauLive.toFixed(2)}`) : ""}
+                  </button>
+                </div>
+              </section>
+              <section className="fs-group">
+                <p className="fs-title">Rows</p>
+                <label className="fs-field"><span className="fc-lbl">Sort</span>
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>{SORTS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+                </label>
+                <label className="fs-field"><span className="fc-lbl">Group by</span>
+                  <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>{GROUPS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+                </label>
+                <label className="fs-field" title="Column order; rows sorted by degree break ties by this order"><span className="fc-lbl">Set order</span>
+                  <select value={setOrder} onChange={(e) => setSetOrder(e.target.value as SetOrder)}>{ORDERS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+                </label>
+                <label className="fs-field" title="Level of detail per cell: Full = points and half violin, Compact = vertical grayscale strip, Minimal = circles only. Auto: the selected row (and the fish-eye focus) Full, the others at the largest level at which all rows fit"><span className="fc-lbl">Rows</span>
+                  <select value={lod} onChange={(e) => setLod(e.target.value as LodSetting)}>{LODS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+                </label>
+                <label className="fc-check" title="When rows overflow: the hovered or selected row and 3 neighbours on each side get full height">
+                  <input type="checkbox" checked={fisheye} onChange={(e) => setFisheye(e.target.checked)} /> Fish-eye
+                </label>
+              </section>
+              <section className="fs-group">
+                <p className="fs-title">Select rows</p>
+                <div className="fs-btns">
+                  <Popover side label="Filters" badge={filterBadge ? String(filterBadge) : null} title="Degree range, minimum mass and contributors, empty rows">
+                    <p className="panel-title">Filters</p>
+                    <label className="fp-row" title={emptyOk ? "Also show combinations with zero mass in the active mode (only the degree range applies to them)" : `Too many rows: available up to ${MAX_SETS_EMPTY_ROWS} selected sets`}>
+                      <input type="checkbox" checked={withEmpty} disabled={!emptyOk} onChange={(e) => setShowEmpty(e.target.checked)} /> Show empty rows
+                    </label>
+                    <div className="fp-row">
+                      <span className="fp-lbl">Degree</span>
+                      <select aria-label="Minimum degree" value={lo} onChange={(e) => setDegLo(+e.target.value)}>
+                        {K.map((_, d) => <option key={d} value={d + 1}>{d + 1}</option>)}
+                      </select>
+                      to
+                      <select aria-label="Maximum degree" value={hi} onChange={(e) => setDegHi(+e.target.value)}>
+                        {K.map((_, d) => <option key={d} value={d + 1} disabled={d + 1 < lo}>{d + 1}{d + 1 === maxDeg ? " (max nonzero)" : ""}</option>)}
+                      </select>
+                    </div>
+                    <label className="fp-row"><span className="fp-lbl">Min. mass</span>
+                      <input type="number" min={0} step={0.1} value={minMass} onChange={(e) => setMinMass(Math.max(0, +e.target.value || 0))} />
+                      <span className="fp-hint">{minMass ? "" : "0 = any mass > 0"}</span>
+                    </label>
+                    <label className="fp-row"><span className="fp-lbl">Min. contributors</span>
+                      <input type="number" min={1} step={1} value={minContrib} onChange={(e) => setMinContrib(Math.max(1, Math.round(+e.target.value || 1)))} />
+                    </label>
+                    <p className="fp-hint">In inclusive mode the minimum mass and the maximum degree also prune the enumeration.</p>
+                    <button className="fu-link" onClick={() => (setDegLo(null), setDegHi(null), setMinMass(0), setMinContrib(1), setShowEmpty(false))}>Reset filters</button>
+                  </Popover>
+                  <Popover side label="Query" badge={activeClauses.length ? String(query?.agg.rows ?? 0) : null} title="Select combinations: each set must / may / not be in the row; OR between clauses" wide>
+                    <p className="panel-title">Query</p>
+                    <p className="fp-hint">Click a symbol to cycle: <QSym q="may" /> may · <QSym q="must" /> must · <QSym q="not" /> not. A row matches if it matches any clause.</p>
+                    <div className="q-grid" style={{ gridTemplateColumns: `repeat(${cols.length}, 22px) 1fr 18px` }}>
+                      {cols.map((i) => <span key={i} className="q-head" title={names[i]}>{short(names[i], 4)}</span>)}
+                      <span /><span />
+                      {clauses.map((cl, ci) => [
+                        ...cols.map((i) => {
+                          const q = cl[i] ?? "may";
+                          return (
+                            <button
+                              key={`${ci}-${i}`} className="q-cell" aria-label={`${names[i]}: ${q}`} title={`${names[i]}: ${q}`}
+                              onClick={() => setClauses((cs) => cs.map((c, j) => (j === ci ? { ...c, [i]: NEXT_Q[q] } : c)))}
+                            >
+                              <QSym q={q} />
+                            </button>
+                          );
+                        }),
+                        <span key={`t${ci}`} className="q-text">{ci > 0 ? "OR " : ""}{describeClause(activeClauses[ci], names, cols)}</span>,
+                        <button key={`x${ci}`} className="fu-link" aria-label="Remove this clause" onClick={() => setClauses((cs) => cs.filter((_, j) => j !== ci))}>✕</button>,
+                      ])}
+                    </div>
+                    <div className="q-actions">
+                      <button className="fc-btn" onClick={() => setClauses((cs) => [...cs, {}])}>{clauses.length ? "+ OR clause" : "+ Clause"}</button>
+                      {clauses.length > 0 && <button className="fu-link" onClick={() => setClauses([])}>Clear</button>}
+                    </div>
+                    {query && <p className="fp-hint">{query.agg.rows ? `${query.agg.rows} of ${sorted.length} shown combinations match` : "No shown combination matches."}</p>}
+                  </Popover>
+                  <Popover side label="Patterns" badge={openShown ? String(openShown) : null} title="Split rows by the joint pattern of their contributors' memberships (▸ on a row opens one)">
+                    <p className="panel-title">Patterns</p>
+                    <p className="fp-hint">
+                      A row opens (▸) into pattern rows: all high, each mix of high and low, all low, and about equal (high, middle,
+                      low), from the contributors' original memberships in the row's sets. They split the row's contributors and
+                      mass. Full rows also show ribbons between neighbouring set axes: contributors from one membership bin to the next.
+                    </p>
+                    <div className="q-actions">
+                      <button className="fc-btn" disabled={!openable.length} onClick={() => setOpen(new Set(openable.slice(0, PATTERN_OPEN_ALL_MAX).map((c) => c.key)))}>Open all</button>
+                      <button className="fu-link" disabled={!open.size} onClick={() => setOpen(new Set())}>Close all</button>
+                    </div>
+                    {openable.length > PATTERN_OPEN_ALL_MAX && <p className="fp-hint">Open all opens the first {PATTERN_OPEN_ALL_MAX} of {openable.length} rows.</p>}
+                    <label className="fp-row"><span className="fp-lbl">High from</span>
+                      <input type="number" min={0.05} max={0.95} step={0.05} value={cut} onChange={(e) => setCut(Math.min(0.95, Math.max(0.05, +e.target.value || PATTERN_CUT)))} />
+                    </label>
+                    <label className="fp-row"><span className="fp-lbl">Equal within</span>
+                      <input type="number" min={0} max={0.5} step={0.05} value={eps} onChange={(e) => setEps(Math.min(0.5, Math.max(0, +e.target.value || 0)))} />
+                      <span className="fp-hint">max − min</span>
+                    </label>
+                    <p className="fp-hint">Equal rows: high if the mean is ≥ {num(cut + 0.1)}, low if &lt; {num(cut - 0.1)}, middle otherwise.</p>
+                  </Popover>
+                </div>
+              </section>
+              <section className="fs-group">
+                <p className="fs-title">Selected row</p>
+                <div className="fs-field">
+                  <label className="fc-lbl" htmlFor="fu-ref">Reference element</label>
+                  <div className="fs-ref">
+                    <input
+                      id="fu-ref" className="fu-ref" list="fu-ref-list" value={refText} disabled={!selCombo || !contributors.length}
+                      placeholder={!selCombo ? "select a row first" : contributors.length ? `search ${contributors.length} contributors` : "no contributors"}
+                      onChange={(e) => (setRefText(e.target.value), setRefX(byLabel.get(e.target.value) ?? null))}
+                    />
+                    <datalist id="fu-ref-list">{contributors.slice(0, 2000).map((x) => <option key={x} value={optLabel(x)} />)}</datalist>
+                    {refText && <button className="fu-link" aria-label="Clear the reference element" onClick={clearRef}>✕</button>}
+                  </div>
+                </div>
+                <label className="fc-check" title="Draw the reference element's profile in every visible Full row where it contributes, not only in the selected row">
+                  <input type="checkbox" checked={profileAll} onChange={(e) => setProfileAll(e.target.checked)} /> Profile in all rows
+                </label>
+                {selCombo && (
+                  <div className="fs-field" title="Lattice distance |T Δ S|: the number of sets added or removed">
+                    <span className="fc-lbl">Neighbourhood</span>
+                    <div className="seg" role="group" aria-label="Neighbourhood distance">
+                      {[0, 1, 2, 3].map((d) => <button key={d} aria-pressed={hop === d} onClick={() => setHop(d)}>{d ? d : "Off"}</button>)}
+                    </div>
+                    <label className="fc-check" title="Keep only supersets S ⊇ T of the selected row T. In additive mode, the components of all supersets of T add up to T's inclusive mass.">
+                      <input type="checkbox" checked={supOnly} disabled={!hop} onChange={(e) => setSupOnly(e.target.checked)} /> Supersets only
+                    </label>
+                  </div>
+                )}
+              </section>
+              <section className="fs-group">
+                <p className="fs-title">Compare</p>
+                <div className="fs-btns">
+                  <button className="fc-btn" onClick={takeSnapshot} title={`Store the current ranking with its settings (at most 2; a third replaces the oldest)${snapshots.length ? `. Stored: ${snapshots.map((s) => s.label).join("; ")}` : ""}`}>
+                    Snapshot{snapshots.length ? <span className="fc-badge">{snapshots.length}</span> : null}
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
+        </aside>
         <div className="fu-plot">
           <div className="fu-shelf" role="group" aria-label={`${ds.sets.title} not selected`}>
             <span className="fc-lbl" title="Click or drag a set into the header row to select it; drag a header out to deselect it">Sets ({K.length} of max {MAX_SETS})</span>
