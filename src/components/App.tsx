@@ -14,6 +14,9 @@ const DATASETS: DatasetOption[] = [
   { key: "integration", label: "Integration cell types, kNN (graded)" },
   { key: "deconv_sim", label: "Spatial deconvolution, simulated (graded)" },
   { key: "dota2", label: "Dota 2 hero roles (graded)" },
+  { key: "starwars8", label: "Star Wars, 8 characters × IV–VI (graded)" },
+  { key: "starwars43", label: "Star Wars, 43 characters × IV–VI (graded)" },
+  { key: "starwars_all", label: "Star Wars, 113 characters × I–VII (graded)" },
   { key: "fixture", label: "Correctness fixture (4 elements)" },
 ];
 
