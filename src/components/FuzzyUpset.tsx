@@ -64,7 +64,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
   const setHistMax = useMemo(() => Math.max(1, ...setHists.flat()), [setHists]);
 
   const [K, setK] = useState<number[]>(() => defaultSets(data));
-  const [mode, setMode] = useState<Mode>("inclusive");
+  const [mode, setMode] = useState<Mode>("additive");
   const [thOn, setThOn] = useState(false);
   const [tauLive, setTauLive] = useState(0.5);
   const [perSetOn, setPerSetOn] = useState(false);

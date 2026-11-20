@@ -20,11 +20,14 @@ const DATASETS: DatasetOption[] = [
   { key: "fixture", label: "Correctness fixture (4 elements)" },
 ];
 
-/** Picks the dataset (?dataset=<key> or the first), loads it and hands it to the plot. */
+/** Shown when the URL names no dataset: small enough to check every value by hand. */
+const DEFAULT_DATASET = "starwars8";
+
+/** Picks the dataset (?dataset=<key> or DEFAULT_DATASET), loads it and hands it to the plot. */
 export default function App() {
   const [which, setWhich] = useState(() => {
     const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("dataset") : null;
-    return DATASETS.some((d) => d.key === q) ? q! : DATASETS[0].key;
+    return DATASETS.some((d) => d.key === q) ? q! : DEFAULT_DATASET;
   });
   const [cache, setCache] = useState<Record<string, Dataset>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});

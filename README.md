@@ -14,11 +14,11 @@ Each element $x$ has a membership $m(x, i) \in [0, 1]$ in each set $i$. Membersh
 $K$ = the selected sets. At membership level $\alpha \in (0, 1]$, $x$ belongs crisply to $\{ i \in K : m(x, i) \ge \alpha \}$.
 Both modes are the crisp UpSet integrated over $\alpha$.
 
-**Inclusive intersections** (default). Sets outside $T$ are unrestricted:
+**Inclusive intersections.** Sets outside $T$ are unrestricted:
 
 $$\mathrm{inc}(x, T) = \min_{i \in T} m(x, i), \qquad \mathrm{incMass}(T) = \sum_x \mathrm{inc}(x, T)$$
 
-**Exclusive intersections.** The length of the $\alpha$ range in which $x$'s crisp pattern is exactly $S$:
+**Exclusive intersections** (default). The length of the $\alpha$ range in which $x$'s crisp pattern is exactly $S$:
 
 $$c(x, S) = \max\Big(0,\ \min_{i \in S} m(x, i) - \max_{j \in K \setminus S} m(x, j)\Big) \quad (\max \emptyset = 0)$$
 

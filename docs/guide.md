@@ -15,7 +15,7 @@ cell type). Memberships are independent: they need not sum to 1 and are never no
 **Membership levels.** At a level α in (0, 1], *x* belongs crisply to `{ i ∈ K : m(x, i) ≥ α }`. Both modes below are
 the crisp UpSet plot integrated over all α. α is the explanation only; it is not a control.
 
-### Inclusive intersections (default)
+### Inclusive intersections
 
 For a combination *T*, sets outside *T* are unrestricted:
 
@@ -26,7 +26,7 @@ For a combination *T*, sets outside *T* are unrestricted:
 `inclusiveMembership(x, T)` is the length of the α range in which *x* is in every set of *T*. An element contributes
 to many rows. Inclusive values do not depend on *K*.
 
-### Exclusive intersections
+### Exclusive intersections (default)
 
 For a combination *S*:
 
