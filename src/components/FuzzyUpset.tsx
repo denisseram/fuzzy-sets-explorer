@@ -351,7 +351,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
     const tauText = !threshold ? "τ off" : perSetOn ? "per-set τ" : `τ = ${num(tau)}`;
     const snap: Snapshot = {
       id: Date.now(),
-      label: `${mode}, ${tauText}`,
+      label: `${mode === "additive" ? "exclusive" : mode}, ${tauText}`,
       details: [
         `sort: ${SORTS.find(([v]) => v === sortBy)![1].toLowerCase()}`,
         `filters: degree ${lo}–${hi}, mass ≥ ${num(minMass)}${minMass ? "" : " (> 0)"}, contributors ≥ ${minContrib}${withEmpty ? ", empty rows shown" : ""}`,
@@ -424,7 +424,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
                 <div className="fs-field"><span className="fc-lbl">Mode</span>
                   <div className="seg seg-col" role="group" aria-label="Mode">
                     <button aria-pressed={mode === "inclusive"} onClick={() => setMode("inclusive")} title="Membership in every set of the row (min); other sets unrestricted">Inclusive intersections</button>
-                    <button aria-pressed={mode === "additive"} onClick={() => setMode("additive")} title="Membership above the element's memberships in the other selected sets; the masses add up">Additive contributions</button>
+                    <button aria-pressed={mode === "additive"} onClick={() => setMode("additive")} title="Membership above the element's memberships in the other selected sets; the masses add up">Exclusive intersections</button>
                   </div>
                 </div>
                 <div className="fs-btns">
@@ -567,7 +567,7 @@ export default function FuzzyUpset({ ds, data, issues }: { ds: Dataset; data: Me
                     <div className="seg" role="group" aria-label="Neighbourhood distance">
                       {[0, 1, 2, 3].map((d) => <button key={d} aria-pressed={hop === d} onClick={() => setHop(d)}>{d ? d : "Off"}</button>)}
                     </div>
-                    <label className="fc-check" title="Keep only supersets S ⊇ T of the selected row T. In additive mode, the components of all supersets of T add up to T's inclusive mass.">
+                    <label className="fc-check" title="Keep only supersets S ⊇ T of the selected row T. In exclusive mode, the components of all supersets of T add up to T's inclusive mass.">
                       <input type="checkbox" checked={supOnly} disabled={!hop} onChange={(e) => setSupOnly(e.target.checked)} /> Supersets only
                     </label>
                   </div>

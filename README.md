@@ -4,7 +4,7 @@ One UpSet plot for fuzzy sets. Rows are the nonzero combinations of up to 20 sel
 are drawn inside the combination matrix. Live: https://denisseram.github.io/fuzzy-sets-explorer/
 
 Scales to 20 sets, thousands of rows and 50,000 elements without building all 2^|K| combinations (per-element chains
-for additive rows, a pruned level-wise enumeration for inclusive rows), with UpSet's filters, aggregation, sorting,
+for exclusive rows, a pruned level-wise enumeration for inclusive rows), with UpSet's filters, aggregation, sorting,
 queries and adjustable scale, levels of detail, fish-eye, lattice-neighbourhood focus, and snapshots for comparing
 rankings (e.g. across τ). See [docs/guide.md](docs/guide.md), section 11.
 
@@ -18,7 +18,7 @@ Both modes are the crisp UpSet integrated over $\alpha$.
 
 $$\mathrm{inc}(x, T) = \min_{i \in T} m(x, i), \qquad \mathrm{incMass}(T) = \sum_x \mathrm{inc}(x, T)$$
 
-**Additive contributions.** The length of the $\alpha$ range in which $x$'s crisp pattern is exactly $S$:
+**Exclusive intersections.** The length of the $\alpha$ range in which $x$'s crisp pattern is exactly $S$:
 
 $$c(x, S) = \max\Big(0,\ \min_{i \in S} m(x, i) - \max_{j \in K \setminus S} m(x, j)\Big) \quad (\max \emptyset = 0)$$
 
@@ -49,8 +49,8 @@ npm run bench        # row computation on 50,000 synthetic elements (not part of
 ```
 
 Benchmark (Node 22.20, Apple laptop; 50,000 elements, |K| = 20, 1–4 positive memberships each; median of 7):
-additive 25 ms, inclusive with minMass = 0 48 ms (5,825 nonzero rows each); with τ = 0.3: 17 ms and 35 ms. Targets:
-300 ms and 1 s. Dense extreme (every membership > 0): additive 0.9 s; inclusive stops at the budget after degree 1.
+exclusive 25 ms, inclusive with minMass = 0 48 ms (5,825 nonzero rows each); with τ = 0.3: 17 ms and 35 ms. Targets:
+300 ms and 1 s. Dense extreme (every membership > 0): exclusive 0.9 s; inclusive stops at the budget after degree 1.
 
 Calculations: [src/lib/fuzzyDecomposition.ts](src/lib/fuzzyDecomposition.ts); display logic (filters, groups, queries,
 level of detail, horizon bars, neighbourhoods, layout, snapshots): [src/lib/upsetView.ts](src/lib/upsetView.ts). Both

@@ -76,7 +76,7 @@ function Explorer({ ds }: { ds: Dataset }) {
           <br /><br />
           <strong>Inclusive intersections</strong>: an element counts in a row with the smallest of its memberships in the
           row's sets (other sets unrestricted), so it can count in many rows.{" "}
-          <strong>Additive contributions</strong>: it counts with how far that smallest membership exceeds its largest
+          <strong>Exclusive intersections</strong>: it counts with how far that smallest membership exceeds its largest
           membership in the other selected sets. These parts add up: summed over every row containing a combination they
           give its inclusive value, and summed over all rows they give the element's largest membership.
           <br /><br />
@@ -85,7 +85,7 @@ function Explorer({ ds }: { ds: Dataset }) {
           membership in that set (0 bottom, 1 top), and a half violin of the same values (smoothed counts, one scale for
           all). <strong>Reference element</strong>: click a point (or pick it in the field) to draw that element's
           profile across the row and a dashed line at its minimum over the row's sets (every row it contributes to opens
-          at full detail with its points highlighted); in additive mode the shaded band
+          at full detail with its points highlighted); in exclusive mode the shaded band
           is its contribution. <strong>Patterns</strong>: ribbons between neighbouring set axes show how the
           memberships combine (thickness = elements); ▸ on a row splits it into pattern rows (both high, one high, both
           low, about equal) that add up to the row.

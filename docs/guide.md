@@ -26,7 +26,7 @@ For a combination *T*, sets outside *T* are unrestricted:
 `inclusiveMembership(x, T)` is the length of the α range in which *x* is in every set of *T*. An element contributes
 to many rows. Inclusive values do not depend on *K*.
 
-### Additive contributions
+### Exclusive intersections
 
 For a combination *S*:
 
@@ -41,7 +41,7 @@ element's memberships in the other selected sets. Components depend on *K*.
 
 Components are not disjoint groups of elements. Per element, the nonzero components form a nested chain of at most
 |K| combinations (sort the memberships; each step down adds the next set). So one element contributes to up to |K|
-rows, and additive counts do not sum to the number of elements.
+rows, and exclusive counts do not sum to the number of elements.
 
 **Identities** (tested for every element and every mass):
 
@@ -49,8 +49,8 @@ rows, and additive counts do not sum to the number of elements.
     inclusiveMass(T)          = Σ over S ⊇ T of componentMass(S)
     Σ over all S of component(x, S) = max over i ∈ K of m(x, i)
 
-So the additive masses sum to the sigma-count of the fuzzy union of *K*. With 0/1 memberships, inclusive mode gives
-the crisp inclusive intersections and additive mode the crisp exclusive ("distinct") intersections.
+So the exclusive masses sum to the sigma-count of the fuzzy union of *K*. With 0/1 memberships, inclusive mode gives
+the crisp inclusive intersections and exclusive mode the crisp exclusive ("distinct") intersections.
 
 A component is **not** `min(min over S, 1 − max over K \ S)` (a t-norm with the complement): that does not reconstruct
 the inclusive values.
@@ -88,7 +88,7 @@ Under the title: "Showing 37 of 412 nonzero combinations" (section 11.2).
 
 **Controls bar**
 
-- Row 1: **Mode** (Inclusive intersections | Additive contributions); **Reference element** (a searchable field with
+- Row 1: **Mode** (Inclusive intersections | Exclusive intersections); **Reference element** (a searchable field with
   the contributors of the selected row); **Threshold** (threshold mode and its sidebar; disabled for crisp data);
   **Snapshot** (section 11.11).
 - Row 2: **Sort**, **Group by**, **Set order**, **Rows** (level of detail), **Fish-eye**, **Filters ▾**, **Query ▾**,
@@ -119,7 +119,7 @@ In each cell of a set *i* in row *T*, the row's **contributors'** **original** m
 components, not thresholded values):
 
 - **Population**, the same for every set of the row: inclusive mode, elements with `inclusiveMembership(x, T) > 0`;
-  additive mode, elements with `component(x, T) > 0`; in threshold mode decided with *m'*.
+  exclusive mode, elements with `component(x, T) > 0`; in threshold mode decided with *m'*.
 - **Y**: membership, 0 at the bottom of the plot area, 1 at the top; light gridlines at 0.2, 0.4, 0.6, 0.8; "0" and
   "1" once per row, left of the first cell. A thin vertical axis line per cell.
 - **Points**: one per contributor, at its membership, in a 22 px jitter strip left of the axis (radius 2.5 px). The
@@ -173,7 +173,7 @@ For the reference element *x* and the selected row *T* (Full rows):
 - **Dashed line** at `referenceValue = min over i ∈ T of m(x, i)` (original values, also in threshold mode), across
   the cells of *T*, with the label right of the matrix, e.g. "E1: min(A, B) = 0.70". Its tooltip adds *x*'s
   memberships and metadata. Compact rows: a red tick across each strip.
-- **Additive mode**: the line still shows the inclusive minimum; a red band from `outsideMaximum` to `insideMinimum`
+- **Exclusive mode**: the line still shows the inclusive minimum; a red band from `outsideMaximum` to `insideMinimum`
   spans the cells of *T*: its height is exactly `component(x, T)` (with *m'* in threshold mode).
 - **Open all its rows** (next to the field, on by default): every shown row where *x* contributes is Full (points
   and violins, in any Rows setting, not dimmed), with *x*'s points, curve and dashed line. Off: only the selected row.
@@ -243,7 +243,7 @@ Fixture, inclusive A ∩ B: **A low · B high** (E2, mass 0.2) and **Equal, high
 
 ## 8. Correctness fixture
 
-With the defaults (empty rows hidden), additive mode shows 5 rows: C and AC have component mass 0.
+With the defaults (empty rows hidden), exclusive mode shows 5 rows: C and AC have component mass 0.
 
 Bundled as the dataset "Correctness fixture" (`?dataset=fixture`, written by `scripts/export_fixture.mjs`) and used
 in the unit tests:
@@ -259,12 +259,12 @@ Without threshold, component masses (contributors): A 0.1 (E1) · B 0.5 (E2) · 
 BC 0.2 (E2) · ABC 0.7 (E1, E2).
 
 Inclusive A ∩ B: mass 1.5, contributors E1, E2, E4; points A [0.8, 0.2, 0.6], B [0.7, 0.9, 0.6]; clicking E1's point
-draws its profile from (A, 0.8) to (B, 0.7) and the dashed line at 0.70. Additive AB: mass 0.8, contributors E1, E4 (points A [0.8, 0.6], B [0.7, 0.6]); E1's band runs from 0.5 to 0.7.
+draws its profile from (A, 0.8) to (B, 0.7) and the dashed line at 0.70. Exclusive AB: mass 0.8, contributors E1, E4 (points A [0.8, 0.6], B [0.7, 0.6]); E1's band runs from 0.5 to 0.7.
 
 Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 
 - Inclusive: A 1.4 (E1, E4) · B 2.2 (E1, E2, E4) · C 0.5 (E1) · AB 1.3 (E1, E4) · AC 0.5 · BC 0.5 · ABC 0.5 (E1).
-- Additive: A 0.1 (E1) · B 0.9 (E2) · C 0 · AB 0.8 (E1, E4) · AC 0 · BC 0 · ABC 0.5 (E1).
+- Exclusive: A 0.1 (E1) · B 0.9 (E2) · C 0 · AB 0.8 (E1, E4) · AC 0 · BC 0 · ABC 0.5 (E1).
 - Rings: row B rings set C in both modes (E2: C = 0.4). E2's A = 0.2 is below β·τ = 0.25: no ring.
 
 ## 9. Colours and sizes
@@ -286,7 +286,7 @@ Threshold τ = 0.5, β = ½, share 20 % (E1's C = 0.5 reaches τ):
 ## 10. Caveats
 
 - **One count scale.** The row with the most contributors in a bin (among all filtered rows, on screen or not) sets
-  the scale for all; violins of small rows can be almost flat (MovieLens, additive mode). Hover a violin for exact
+  the scale for all; violins of small rows can be almost flat (MovieLens, exclusive mode). Hover a violin for exact
   counts. The scale does not change when scrolling.
 - **Few points.** With a handful of contributors the violin is a sum of narrow bumps; read the points.
 - **Many tiny memberships.** Without a threshold any membership above 0 makes an element a contributor; with Tag
@@ -303,7 +303,7 @@ tested); the brute-force definitions are kept in `src/lib/bruteForce.ts` as test
 
 ### 11.1 Computation without all 2^|K| combinations
 
-**Additive: per-element chains.** For each element, its distinct positive values over *K* in descending order
+**Exclusive: per-element chains.** For each element, its distinct positive values over *K* in descending order
 v1 > v2 > … > vm (v(m+1) = 0) give the combinations S_j = { i ∈ K : m'(x, i) ≥ v_j } with
 `component(x, S_j) = v_j − v(j+1)`; every other combination has component 0. Tied sets enter the same S_j.
 O(|K| log |K|) per element.
@@ -319,7 +319,7 @@ Property tests compare both with the brute-force definitions on 1,000 random dat
 {0, 0.5, 1, random}, random τ, random per-set τ): masses within 1e-9, identical contributor sets.
 
 **Benchmark** (`npm run bench`, synthetic soft clustering: 50,000 elements, |K| = 20, 1–4 positive memberships each):
-see the README for measured times. Targets: additive < 300 ms, inclusive (minMass = 0) < 1 s. Both are met on the
+see the README for measured times. Targets: exclusive < 300 ms, inclusive (minMass = 0) < 1 s. Both are met on the
 main thread, so no Web Worker is used.
 
 ### 11.2 Filters (Filters ▾)
@@ -340,7 +340,7 @@ mass = sum of the rows' masses (tooltip in inclusive mode: "sum of row masses (r
 distinct elements over the rows. No histograms in headers. Set and pair headers draw the grouping sets as dark circles
 and the other sets as "may" (light circle with a dark dot). By set and by pairs repeat rows across groups. By pairs,
 rows of one set form a last group "One set"; set → pairs nests "A, B", … and "A only" under "Contains A". Groups keep a
-fixed order (degree ascending; sets in column order); sorting applies within groups. In additive mode, the pair group
+fixed order (degree ascending; sets in column order); sorting applies within groups. In exclusive mode, the pair group
 {A, B} has mass `inclusiveMass(A ∩ B)` (tested).
 
 ### 11.4 Sorting and queries
@@ -392,7 +392,7 @@ fit, the rows farthest from the focus become stubs.
 
 While a row T is selected: Neighbourhood Off | 1 | 2 | 3 and "Supersets only". The distance between combinations is
 |T Δ S| (sets added or removed). Rows within the distance stay; the others are replaced by stubs in place (the order
-does not change). Supersets only keeps S ⊇ T: in additive mode these rows' components add up to T's inclusive mass.
+does not change). Supersets only keeps S ⊇ T: in exclusive mode these rows' components add up to T's inclusive mass.
 
 ### 11.9 Stubs
 
@@ -419,7 +419,7 @@ back to it.
 **Snapshot** stores the ranking of the rows that pass the filters (key, rank, mass, count) with its settings (mode,
 τ or τ_i, sort, filters); at most 2, a third replaces the oldest; ✕ removes one. Each is drawn right of the bars as a
 narrow column of mini glyphs (one dot per selected set) in the snapshot's order, labelled "inclusive, τ = 0.3" or
-"additive, τ off", with slope lines from the live rows (green: ranked higher now, red: lower, grey: same). A row
+"exclusive, τ off", with slope lines from the live rows (green: ranked higher now, red: lower, grey: same). A row
 missing on one side gets a short arrow and a tooltip ("not in snapshot" / "not in the live chart"). After any change
 of mode, τ, sort or filters, rows that moved up flash green and rows that moved down red (opacity 0.25 for one rank up
 to 0.7 for 10 or more), fading over 2 s, while rows move to their new position (400 ms). Typical use: snapshot at

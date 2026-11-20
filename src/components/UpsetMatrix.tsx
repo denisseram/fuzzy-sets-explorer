@@ -316,7 +316,7 @@ function UpsetMatrix(p: MatrixProps) {
   const W = colX(k) + LABEL_W;
   const hx = (c: number, v: number) => colX(c) + HIST_X + v * HIST_W;
   const rowName = (T: readonly number[]) => cols.filter((s) => T.includes(s)).map((i) => names[i]).join(" ∩ ") + T.filter((s) => !cols.includes(s)).map((s) => ` ∩ ${names[s]}`).join("");
-  const modeName = mode === "inclusive" ? "inclusive intersection" : "additive contribution";
+  const modeName = mode === "inclusive" ? "inclusive intersection" : "exclusive intersection";
   const headTotal = HEAD + (p.query ? QUERY_H : 0);
 
   // row height (level of detail) and layout
